@@ -351,7 +351,7 @@ class Image extends StatefulWidget {
     Map<String, String> headers,
     int cacheWidth,
     int cacheHeight,
-  }) : image = ResizeImage.resizeIfNeeded(cacheWidth, cacheHeight, NetworkImage(src, scale: scale, headers: headers)),
+  }) : image = ResizeImage.resizeIfNeeded(cacheWidth, cacheHeight, NetworkImage(src, scale: scale, headers: headers), filterQuality: filterQuality),
        assert(alignment != null),
        assert(repeat != null),
        assert(matchTextDirection != null),
@@ -403,7 +403,7 @@ class Image extends StatefulWidget {
     this.filterQuality = FilterQuality.low,
     int cacheWidth,
     int cacheHeight,
-  }) : image = ResizeImage.resizeIfNeeded(cacheWidth, cacheHeight, FileImage(file, scale: scale)),
+  }) : image = ResizeImage.resizeIfNeeded(cacheWidth, cacheHeight, FileImage(file, scale: scale), filterQuality: filterQuality),
        loadingBuilder = null,
        assert(alignment != null),
        assert(repeat != null),
@@ -568,7 +568,8 @@ class Image extends StatefulWidget {
     int cacheHeight,
   }) : image = ResizeImage.resizeIfNeeded(cacheWidth, cacheHeight, scale != null
          ? ExactAssetImage(name, bundle: bundle, scale: scale, package: package)
-         : AssetImage(name, bundle: bundle, package: package)
+         : AssetImage(name, bundle: bundle, package: package),
+         filterQuality: filterQuality,
        ),
        loadingBuilder = null,
        assert(alignment != null),
@@ -623,7 +624,7 @@ class Image extends StatefulWidget {
     this.filterQuality = FilterQuality.low,
     int cacheWidth,
     int cacheHeight,
-  }) : image = ResizeImage.resizeIfNeeded(cacheWidth, cacheHeight, MemoryImage(bytes, scale: scale)),
+  }) : image = ResizeImage.resizeIfNeeded(cacheWidth, cacheHeight, MemoryImage(bytes, scale: scale), filterQuality: filterQuality),
        loadingBuilder = null,
        assert(alignment != null),
        assert(repeat != null),

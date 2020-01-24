@@ -3,7 +3,7 @@
 // found in the LICENSE file.
 
 import 'dart:typed_data' show Uint8List;
-import 'dart:ui' as ui show instantiateImageCodec, Codec;
+import 'dart:ui' as ui show instantiateImageCodec, Codec, FilterQuality;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show ServicesBinding;
 
@@ -82,6 +82,7 @@ mixin PaintingBinding on BindingBase, ServicesBinding {
   Future<ui.Codec> instantiateImageCodec(Uint8List bytes, {
     int cacheWidth,
     int cacheHeight,
+    ui.FilterQuality filterQuality,
   }) {
     assert(cacheWidth == null || cacheWidth > 0);
     assert(cacheHeight == null || cacheHeight > 0);
@@ -89,6 +90,7 @@ mixin PaintingBinding on BindingBase, ServicesBinding {
       bytes,
       targetWidth: cacheWidth,
       targetHeight: cacheHeight,
+      filterQuality: filterQuality,
     );
   }
 

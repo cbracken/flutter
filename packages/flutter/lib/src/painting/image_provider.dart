@@ -6,7 +6,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui show Codec;
-import 'dart:ui' show Size, Locale, TextDirection, hashValues;
+import 'dart:ui' show FilterQuality, Size, Locale, TextDirection, hashValues;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -159,8 +159,8 @@ class ImageConfiguration {
 ///
 /// See also:
 ///
-///  * [ResizeImage], which uses this to override the `cacheWidth` and `cacheHeight` parameters.
-typedef DecoderCallback = Future<ui.Codec> Function(Uint8List bytes, {int cacheWidth, int cacheHeight});
+///  * [ResizeImage], which uses this to override the `cacheWidth`, `cacheHeight`, and `filterQuality` parameters.
+typedef DecoderCallback = Future<ui.Codec> Function(Uint8List bytes, {int cacheWidth, int cacheHeight, FilterQuality filterQuality});
 
 /// Identifies an image without committing to the precise final asset. This
 /// allows a set of images to be identified and for the precise image to later
@@ -529,7 +529,9 @@ class ResizeImage extends ImageProvider<_SizeAwareCacheKey> {
     this.imageProvider, {
     this.width,
     this.height,
-  }) : assert(width != null || height != null);
+    this.filterQuality = FilterQuality.low,
+  }) : assert(width != null || height != null),
+       assert(filterQuality != null);
 
   /// The [ImageProvider] that this class wraps.
   final ImageProvider imageProvider;
@@ -540,26 +542,33 @@ class ResizeImage extends ImageProvider<_SizeAwareCacheKey> {
   /// The height the image should decode to and cache.
   final int height;
 
+  /// The image filter quality applied during image resizing.
+  final FilterQuality filterQuality;
+
   /// Composes the `provider` in a [ResizeImage] only when `cacheWidth` and
   /// `cacheHeight` are not both null.
   ///
   /// When `cacheWidth` and `cacheHeight` are both null, this will return the
   /// `provider` directly.
-  static ImageProvider<dynamic> resizeIfNeeded(int cacheWidth, int cacheHeight, ImageProvider<dynamic> provider) {
+  static ImageProvider<dynamic> resizeIfNeeded(int cacheWidth, int cacheHeight, ImageProvider<dynamic> provider, {FilterQuality filterQuality = FilterQuality.low}) {
+    print('============ resizeIfNeeded: width: $cacheWidth, height: $cacheHeight');
     if (cacheWidth != null || cacheHeight != null) {
-      return ResizeImage(provider, width: cacheWidth, height: cacheHeight);
+      print('------------- resizeIfNeeded: filterQuality is $filterQuality');
+      assert(filterQuality != null);
+      return ResizeImage(provider, width: cacheWidth, height: cacheHeight, filterQuality: filterQuality);
     }
     return provider;
   }
 
   @override
   ImageStreamCompleter load(_SizeAwareCacheKey key, DecoderCallback decode) {
-    final DecoderCallback decodeResize = (Uint8List bytes, {int cacheWidth, int cacheHeight}) {
+    final DecoderCallback decodeResize = (Uint8List bytes, {int cacheWidth, int cacheHeight, FilterQuality filterQuality}) {
       assert(
         cacheWidth == null && cacheHeight == null,
         'ResizeImage cannot be composed with another ImageProvider that applies cacheWidth or cacheHeight.'
       );
-      return decode(bytes, cacheWidth: width, cacheHeight: height);
+      print('load, decodeResize closure: filterQuality is $filterQuality');
+      return decode(bytes, cacheWidth: width, cacheHeight: height, filterQuality: filterQuality);
     };
     return imageProvider.load(key.providerCacheKey, decodeResize);
   }
