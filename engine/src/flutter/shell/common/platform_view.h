@@ -87,6 +87,8 @@ class PlatformView {
     ///
     virtual void OnPlatformViewScheduleFrame() = 0;
 
+    virtual void OnPlatformViewNotifyInputEvent() {}
+
     /// @brief  Allocate resources for a new non-implicit view and inform
     ///         Dart about the view, and on success, schedules a new frame.
     ///
@@ -609,6 +611,8 @@ class PlatformView {
   ///             call, the framework may need to start generating a new frame.
   ///
   void ScheduleFrame();
+
+  void NotifyInputEvent();
 
   /// @brief  Used by embedders to notify the shell of a new non-implicit view.
   ///

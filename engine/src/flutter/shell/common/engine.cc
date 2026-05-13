@@ -511,6 +511,10 @@ void Engine::ScheduleFrame(bool regenerate_layer_trees) {
   animator_->RequestFrame(regenerate_layer_trees);
 }
 
+void Engine::NotifyInputEventPending() {
+  animator_->NotifyInputEventPending();
+}
+
 void Engine::OnAllViewsRendered() {
   animator_->OnAllViewsRendered();
 }

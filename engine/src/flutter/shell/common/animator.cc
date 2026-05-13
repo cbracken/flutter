@@ -236,6 +236,12 @@ void Animator::DrawLastLayerTrees(
   delegate_.OnAnimatorDrawLastLayerTrees(std::move(frame_timings_recorder));
 }
 
+void Animator::NotifyInputEventPending() {
+  if (waiter_) {
+    waiter_->FireImmediate();
+  }
+}
+
 void Animator::RequestFrame(bool regenerate_layer_trees) {
   if (regenerate_layer_trees && !regenerate_layer_trees_) {
     // This event will be closed by BeginFrame. BeginFrame will only be called

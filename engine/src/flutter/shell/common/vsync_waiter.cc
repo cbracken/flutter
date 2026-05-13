@@ -84,6 +84,18 @@ void VsyncWaiter::ScheduleSecondaryCallback(uintptr_t id,
   AwaitVSyncForSecondaryCallback();
 }
 
+void VsyncWaiter::FireImmediate() {
+  auto now = fml::TimePoint::Now();
+  // If we fired a frame callback very recently (e.g. within the last 8ms),
+  // absorb this immediate request silently to prevent pumping frames faster
+  // than the display refresh rate during fast input/dragging.
+  if (now - last_fire_callback_time_ < fml::TimeDelta::FromMilliseconds(8)) {
+    return;
+  }
+  auto target = now + fml::TimeDelta::FromSecondsF(1.0 / 60.0);
+  FireCallback(now, target, true);
+}
+
 void VsyncWaiter::FireCallback(fml::TimePoint frame_start_time,
                                fml::TimePoint frame_target_time,
                                bool pause_secondary_tasks) {
@@ -110,6 +122,13 @@ void VsyncWaiter::FireCallback(fml::TimePoint frame_start_time,
   }
 
   if (callback) {
+    // Ensure target timestamps strictly increase to avoid clamping errors.
+    if (last_frame_target_time_ > frame_target_time) {
+      frame_target_time = last_frame_target_time_;
+    }
+    last_frame_target_time_ = frame_target_time;
+    last_fire_callback_time_ = fml::TimePoint::Now();
+
     const uint64_t flow_identifier = fml::tracing::TraceNonce();
     if (pause_secondary_tasks) {
       PauseDartEventLoopTasks();

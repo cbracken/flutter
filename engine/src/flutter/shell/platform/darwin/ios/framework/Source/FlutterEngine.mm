@@ -400,6 +400,13 @@ NSString* const kFlutterApplicationRegistrarKey = @"io.flutter.flutter.applicati
   self.platformView->DispatchPointerDataPacket(std::move(packet));
 }
 
+- (void)notifyInputEvent {
+  if (!self.platformView) {
+    return;
+  }
+  self.platformView->NotifyInputEvent();
+}
+
 - (BOOL)platformViewShouldAcceptTouchAtTouchBeganLocation:(flutter::PointData)location
                                                    viewId:(uint64_t)viewId {
   if (!self.platformView) {

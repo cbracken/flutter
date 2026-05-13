@@ -261,6 +261,49 @@ TEST_F(ShellTest, AnimatorDoesNotNotifyDelegateIfPipelineIsNotEmpty) {
   PostTaskSync(task_runners.GetUITaskRunner(), [&] { animator.reset(); });
 }
 
+TEST_F(ShellTest, AnimatorProactiveInputWakeTriggersImmediateFrame) {
+  FakeAnimatorDelegate delegate;
+  TaskRunners task_runners = {
+      "test",
+      CreateNewThread(),  // platform
+      CreateNewThread(),  // raster
+      CreateNewThread(),  // ui
+      CreateNewThread()   // io
+  };
+
+  auto clock = std::make_shared<ShellTestVsyncClock>();
+  std::shared_ptr<Animator> animator;
+
+  fml::AutoResetWaitableEvent create_latch;
+  // Create the animator on the UI task runner.
+  task_runners.GetUITaskRunner()->PostTask([&] {
+    auto vsync_waiter = static_cast<std::unique_ptr<VsyncWaiter>>(
+        std::make_unique<ShellTestVsyncWaiter>(task_runners, clock));
+    animator = std::make_unique<Animator>(delegate, task_runners,
+                                          std::move(vsync_waiter));
+    create_latch.Signal();
+  });
+  create_latch.Wait();
+
+  fml::AutoResetWaitableEvent begin_frame_latch;
+  EXPECT_CALL(delegate, OnAnimatorBeginFrame).WillOnce([&] {
+    begin_frame_latch.Signal();
+  });
+
+  // Request a frame normally. This arms the VsyncWaiter.
+  task_runners.GetUITaskRunner()->PostTask([&] {
+    animator->RequestFrame();
+    // Now notify input event pending. This should proactively trigger
+    // FireImmediate(), invoking OnAnimatorBeginFrame immediately without
+    // simulating a vsync clock tick!
+    animator->NotifyInputEventPending();
+  });
+
+  begin_frame_latch.Wait();
+
+  PostTaskSync(task_runners.GetUITaskRunner(), [&] { animator.reset(); });
+}
+
 }  // namespace testing
 }  // namespace flutter
 

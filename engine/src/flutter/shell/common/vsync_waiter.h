@@ -35,6 +35,10 @@ class VsyncWaiter : public std::enable_shared_from_this<VsyncWaiter> {
   /// |Animator::ScheduleMaybeClearTraceFlowIds|.
   void ScheduleSecondaryCallback(uintptr_t id, const fml::closure& callback);
 
+  /// If a vsync callback is pending, triggers it immediately on the UI thread
+  /// using the current time. Used for low-latency input-driven frame scheduling.
+  void FireImmediate();
+
  protected:
   // On some backends, the |FireCallback| needs to be made from a static C
   // method.
@@ -78,6 +82,8 @@ class VsyncWaiter : public std::enable_shared_from_this<VsyncWaiter> {
   std::mutex callback_mutex_;
   Callback callback_;
   std::unordered_map<uintptr_t, fml::closure> secondary_callbacks_;
+  fml::TimePoint last_frame_target_time_;
+  fml::TimePoint last_fire_callback_time_;
 
   void PauseDartEventLoopTasks();
   static void ResumeDartEventLoopTasks(fml::TaskQueueId ui_task_queue_id);

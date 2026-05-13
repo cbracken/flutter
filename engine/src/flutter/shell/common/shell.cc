@@ -1143,6 +1143,20 @@ void Shell::OnPlatformViewScheduleFrame() {
 }
 
 // |PlatformView::Delegate|
+void Shell::OnPlatformViewNotifyInputEvent() {
+  TRACE_EVENT0("flutter", "Shell::OnPlatformViewNotifyInputEvent");
+  FML_DCHECK(is_set_up_);
+  FML_DCHECK(task_runners_.GetPlatformTaskRunner()->RunsTasksOnCurrentThread());
+
+  fml::TaskRunner::RunNowOrPostTask(task_runners_.GetUITaskRunner(),
+                                    [engine = engine_->GetWeakPtr()]() {
+                                      if (engine) {
+                                        engine->NotifyInputEventPending();
+                                      }
+                                    });
+}
+
+// |PlatformView::Delegate|
 void Shell::OnPlatformViewSetViewportMetrics(int64_t view_id,
                                              const ViewportMetrics& metrics) {
   FML_DCHECK(is_set_up_);

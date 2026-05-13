@@ -3092,4 +3092,26 @@ extern NSNotificationName const FlutterViewControllerWillDealloc;
   [appDelegate setMockLaunchEngine:nil];
 }
 
+- (void)testTouchesBeganWillNotifyInputEvent {
+  FlutterViewController* viewController =
+      [[FlutterViewController alloc] initWithEngine:self.mockEngine nibName:nil bundle:nil];
+  FlutterViewController* viewControllerMock = OCMPartialMock(viewController);
+  UIScreen* screen = [self setUpMockScreen];
+  CGRect viewFrame = screen.bounds;
+  [self setUpMockView:viewControllerMock
+               screen:screen
+            viewFrame:viewFrame
+       convertedFrame:viewFrame];
+
+  id mockTouch = OCMClassMock([UITouch class]);
+  OCMStub([mockTouch phase]).andReturn(UITouchPhaseBegan);
+  OCMStub([mockTouch locationInView:[OCMArg any]]).andReturn(CGPointMake(0, 0));
+
+  NSSet* touches = [NSSet setWithObject:mockTouch];
+  id mockEvent = OCMClassMock([UIEvent class]);
+  [viewControllerMock touchesBegan:touches withEvent:mockEvent];
+
+  OCMVerify([self.mockEngine notifyInputEvent]);
+}
+
 @end

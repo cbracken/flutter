@@ -892,6 +892,8 @@ class Engine final : public RuntimeDelegate, PointerDataDispatcher::Delegate {
   /// tree.
   void ScheduleFrame() { ScheduleFrame(true); }
 
+  void NotifyInputEventPending();
+
   // |RuntimeDelegate|
   void OnAllViewsRendered() override;
 

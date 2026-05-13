@@ -1278,6 +1278,17 @@ static flutter::PointerData::DeviceKind DeviceKindFromTouchType(UITouch* touch) 
   }
 
   [self.engine dispatchPointerDataPacket:std::move(packet)];
+
+  BOOL isUserInteracting = NO;
+  for (UITouch* touch in touches) {
+    if (touch.phase == UITouchPhaseBegan || touch.phase == UITouchPhaseMoved) {
+      isUserInteracting = YES;
+      break;
+    }
+  }
+  if (isUserInteracting) {
+    [self.engine notifyInputEvent];
+  }
 }
 
 - (void)touchesBegan:(NSSet*)touches withEvent:(UIEvent*)event {

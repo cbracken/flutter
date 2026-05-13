@@ -92,6 +92,10 @@ void PlatformView::ScheduleFrame() {
   delegate_.OnPlatformViewScheduleFrame();
 }
 
+void PlatformView::NotifyInputEvent() {
+  delegate_.OnPlatformViewNotifyInputEvent();
+}
+
 void PlatformView::AddView(int64_t view_id,
                            const ViewportMetrics& viewport_metrics,
                            AddViewCallback callback) {

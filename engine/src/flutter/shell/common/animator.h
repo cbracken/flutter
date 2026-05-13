@@ -52,6 +52,7 @@ class Animator final {
   ~Animator();
 
   void RequestFrame(bool regenerate_layer_trees = true);
+  void NotifyInputEventPending();
 
   //--------------------------------------------------------------------------
   /// @brief    Tells the Animator that all views that should render for this
