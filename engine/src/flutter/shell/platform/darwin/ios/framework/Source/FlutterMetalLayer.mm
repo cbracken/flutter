@@ -467,6 +467,12 @@ extern CFTimeInterval display_link_target;
         [[NSBundle mainBundle] objectForInfoDictionaryKey:@"FLTUseFlutterMetalLayer"];
     if (use_flutter_metal_layer != nil && ![use_flutter_metal_layer boolValue]) {
       enabled = NO;
+      [FlutterLogger
+          logWarning:@"Setting FLTUseFlutterMetalLayer=false in the Info.plist is deprecated and "
+                      "the CAMetalLayer presentation path it enables will be removed in a future "
+                      "release. If your application depends on this opt-out, please file an issue "
+                      "at https://github.com/flutter/flutter/issues describing the problem that "
+                      "requires it."];
     }
   }
   return enabled;
