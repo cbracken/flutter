@@ -4165,8 +4165,12 @@ targets:
       - master
     properties:
       task_name: flutter_packaging
+      target_arch: x64
       tags: >
         ["framework", "hostonly", "shard", "mac"]
+    drone_dimensions:
+      - os=Mac
+      - cpu=arm64
     runIf:
       - .ci.yaml
       - engine/**
@@ -7723,11 +7727,12 @@ targets:
       - stable
     properties:
       task_name: flutter_packaging
+      target_arch: x64
       tags: >
         ["framework", "hostonly", "shard", "mac"]
     drone_dimensions:
       - os=Mac
-      - cpu=x86
+      - cpu=arm64
 
 
   - name: Mac_arm64 flutter_packaging
