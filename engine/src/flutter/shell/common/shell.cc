@@ -1001,9 +1001,10 @@ void Shell::OnPlatformViewCreated(std::unique_ptr<Surface> surface) {
       !task_runners_.GetRasterTaskRunner()->RunsTasksOnCurrentThread();
 
   auto raster_task = fml::MakeCopyable(
-      [&waiting_for_first_frame = waiting_for_first_frame_,  //
-       rasterizer = rasterizer_->GetWeakPtr(),               //
-       surface = std::move(surface)                          //
+      [&waiting_for_first_frame = waiting_for_first_frame_,              //
+       &waiting_for_first_frame_mutex = waiting_for_first_frame_mutex_,  //
+       rasterizer = rasterizer_->GetWeakPtr(),                           //
+       surface = std::move(surface)                                      //
   ]() mutable {
         if (rasterizer) {
           // Enables the thread merger which may be used by the external view
@@ -1012,6 +1013,7 @@ void Shell::OnPlatformViewCreated(std::unique_ptr<Surface> surface) {
           rasterizer->Setup(std::move(surface));
         }
 
+        std::scoped_lock lock(waiting_for_first_frame_mutex);
         waiting_for_first_frame.store(true);
       });
 
@@ -1435,7 +1437,9 @@ void Shell::OnAnimatorDraw(std::shared_ptr<FramePipeline> pipeline) {
 
   task_runners_.GetRasterTaskRunner()->PostTask(fml::MakeCopyable(
       [&waiting_for_first_frame = waiting_for_first_frame_,
+       &waiting_for_first_frame_mutex = waiting_for_first_frame_mutex_,
        &waiting_for_first_frame_condition = waiting_for_first_frame_condition_,
+       &first_frame_callbacks = first_frame_callbacks_,
        rasterizer = rasterizer_->GetWeakPtr(),
        weak_pipeline = std::weak_ptr<FramePipeline>(pipeline)]() mutable {
         if (rasterizer) {
@@ -1445,8 +1449,20 @@ void Shell::OnAnimatorDraw(std::shared_ptr<FramePipeline> pipeline) {
           }
 
           if (waiting_for_first_frame.load()) {
-            waiting_for_first_frame.store(false);
+            std::vector<fml::closure> callbacks;
+            {
+              // The store must happen under the mutex: an unguarded store
+              // and notify can slip between a waiter's predicate check and
+              // the moment it blocks on the condition variable, losing the
+              // wake and stranding the waiter for its full timeout.
+              std::scoped_lock lock(waiting_for_first_frame_mutex);
+              waiting_for_first_frame.store(false);
+              std::swap(callbacks, first_frame_callbacks);
+            }
             waiting_for_first_frame_condition.notify_all();
+            for (const fml::closure& callback : callbacks) {
+              callback();
+            }
           }
         }
       }));
@@ -2422,6 +2438,21 @@ void Shell::CancelWaitForFirstFrame() {
     wait_for_first_frame_cancelled_ = true;
   }
   waiting_for_first_frame_condition_.notify_all();
+}
+
+void Shell::AddFirstFrameCallback(fml::closure closure) {
+  FML_DCHECK(is_set_up_);
+  FML_DCHECK(task_runners_.GetPlatformTaskRunner()->RunsTasksOnCurrentThread());
+  FML_DCHECK(closure);
+  {
+    std::scoped_lock lock(waiting_for_first_frame_mutex_);
+    if (waiting_for_first_frame_.load()) {
+      first_frame_callbacks_.push_back(std::move(closure));
+      return;
+    }
+  }
+  // A first frame has already been presented: invoke synchronously.
+  closure();
 }
 
 bool Shell::ReloadSystemFonts() {

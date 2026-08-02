@@ -192,13 +192,86 @@ NSString* const kFlutterApplicationRegistrarKey = @"io.flutter.flutter.applicati
 }
 @end
 
+#pragma mark - First frame waiter
+
+/// A waiter for the first frame presented by the engine's `flutter::Shell`.
+///
+/// Each waiter is signaled at most once: from the raster thread when the shell
+/// presents its first frame (via `Shell::AddFirstFrameCallback`), or from the
+/// platform thread when the engine is torn down before a first frame arrives.
+///
+/// Waiters deliberately hold no reference to the engine or the shell: a thread
+/// blocked in -waitWithTimeout: must remain safe even if both are destroyed
+/// while it waits.
+@interface FlutterFirstFrameWaiter : NSObject
+
+/// Wakes all waiting threads, indicating the first frame has been presented.
+/// Safe to call from any thread.
+- (void)signalRendered;
+
+/// Wakes all waiting threads, indicating no first frame will arrive because
+/// the engine is being torn down. Safe to call from any thread.
+- (void)abort;
+
+/// Blocks the calling thread until the first frame is presented, the waiter is
+/// aborted, or the timeout elapses. Returns YES if the first frame was
+/// presented.
+- (BOOL)waitWithTimeout:(NSTimeInterval)timeout;
+
+@end
+
+@implementation FlutterFirstFrameWaiter {
+  NSCondition* _condition;
+  BOOL _rendered;
+  BOOL _aborted;
+}
+
+- (instancetype)init {
+  self = [super init];
+  if (self) {
+    _condition = [[NSCondition alloc] init];
+  }
+  return self;
+}
+
+- (void)signalRendered {
+  [_condition lock];
+  _rendered = YES;
+  [_condition broadcast];
+  [_condition unlock];
+}
+
+- (void)abort {
+  [_condition lock];
+  _aborted = YES;
+  [_condition broadcast];
+  [_condition unlock];
+}
+
+- (BOOL)waitWithTimeout:(NSTimeInterval)timeout {
+  NSDate* deadline = [NSDate dateWithTimeIntervalSinceNow:timeout];
+  [_condition lock];
+  while (!_rendered && !_aborted) {
+    if (![_condition waitUntilDate:deadline]) {
+      break;
+    }
+  }
+  BOOL rendered = _rendered;
+  [_condition unlock];
+  return rendered;
+}
+
+@end
+
 @implementation FlutterEngine {
   std::shared_ptr<flutter::ThreadHost> _threadHost;
   std::unique_ptr<flutter::Shell> _shell;
 
-  // Callers to -waitForFirstFrame:callback: that are currently queued/processing.
-  // -destroyContext must wait for this group to drain before it is safe to free _shell.
-  dispatch_group_t _firstFrameWaiters;
+  // In-flight waiters created by -waitForFirstFrame:callback:. -destroyContext
+  // aborts these so that threads blocked on them wake promptly during teardown
+  // instead of waiting out their full timeout. The waiters hold no reference to
+  // the engine or shell. Lazily created; main thread only.
+  NSMutableArray<FlutterFirstFrameWaiter*>* _firstFrameWaiters;
 
   flutter::IOSRenderingAPI _renderingApi;
   std::shared_ptr<flutter::SamplingProfiler> _profiler;
@@ -575,13 +648,13 @@ NSString* const kFlutterApplicationRegistrarKey = @"io.flutter.flutter.applicati
 }
 
 - (void)destroyContext {
-  // Clear any tasks waiting on first frame prior to destroying _shell.
-  if (_shell) {
-    _shell->CancelWaitForFirstFrame();
+  // Wake any threads blocked in -waitForFirstFrame:callback: so they don't
+  // wait out their full timeout during teardown. The waiters hold no reference
+  // to the shell, so teardown does not need to wait for them.
+  for (FlutterFirstFrameWaiter* waiter in _firstFrameWaiters) {
+    [waiter abort];
   }
-  if (_firstFrameWaiters) {
-    dispatch_group_wait(_firstFrameWaiters, DISPATCH_TIME_FOREVER);
-  }
+  [_firstFrameWaiters removeAllObjects];
   [self resetChannels];
   self.isolateId = nil;
   _shell.reset();
@@ -1536,48 +1609,47 @@ static void SetEntryPoint(flutter::Settings* settings, NSString* entrypoint, NSS
 
 - (void)waitForFirstFrame:(NSTimeInterval)timeout
                  callback:(void (^_Nonnull)(BOOL didTimeout))callback {
+  FlutterFirstFrameWaiter* waiter = [[FlutterFirstFrameWaiter alloc] init];
+  if (_shell) {
+    // Registered on the platform thread, fired on the raster thread when the
+    // first frame is presented. The closure captures only the waiter, which
+    // holds no reference back to the engine or shell, so a pending callback
+    // never requires (or extends) the shell's lifetime.
+    _shell->AddFirstFrameCallback([waiter] { [waiter signalRendered]; });
+    if (!_firstFrameWaiters) {
+      _firstFrameWaiters = [[NSMutableArray alloc] init];
+    }
+    [_firstFrameWaiters addObject:waiter];
+  } else {
+    // The engine is not running: no first frame will ever arrive.
+    [waiter abort];
+  }
+
   dispatch_queue_t queue = dispatch_get_global_queue(QOS_CLASS_BACKGROUND, 0);
   dispatch_group_t group = dispatch_group_create();
-
-  // Increment count of tasks waiting for first frame callback. Decrement below
-  // on completion or timeout. In -destroyContext we block until all pending
-  // first frame waiter tasks are cancelled.
-  if (!_firstFrameWaiters) {
-    _firstFrameWaiters = dispatch_group_create();
-  }
-  dispatch_group_t firstFrameWaiters = _firstFrameWaiters;
-  dispatch_group_enter(firstFrameWaiters);
-
-  __weak FlutterEngine* weakSelf = self;
   __block BOOL didTimeout = NO;
   dispatch_group_async(group, queue, ^{
-    FlutterEngine* strongSelf = weakSelf;
-    if (!strongSelf || !strongSelf->_shell) {
-      dispatch_group_leave(firstFrameWaiters);
-      return;
-    }
-
-    fml::TimeDelta waitTime = fml::TimeDelta::FromMilliseconds(timeout * 1000);
-    fml::Status status = strongSelf.shell.WaitForFirstFrame(waitTime);
-    didTimeout = status.code() == fml::StatusCode::kDeadlineExceeded;
-    dispatch_group_leave(firstFrameWaiters);
+    // Deliberately captures only the waiter: the engine and shell may be torn
+    // down on the platform thread while this thread is blocked here.
+    // -destroyContext aborts the waiter, so this wakes promptly during
+    // teardown rather than blocking it or waiting out the timeout.
+    didTimeout = ![waiter waitWithTimeout:timeout];
   });
 
   // Only execute the main queue task once the background task has completely finished executing.
   dispatch_group_notify(group, dispatch_get_main_queue(), ^{
-    // Strongly capture self on the task dispatched to the main thread.
+    // Strongly capture self so the engine stays alive until the callback has
+    // been delivered. This block is both created and released on the main
+    // thread, so the capture cannot cause the engine to be dealloc'ed on the
+    // background queue.
     //
-    // When we capture weakSelf strongly in the above block on a background thread, we risk the
-    // possibility that all other strong references to FlutterEngine go out of scope while the block
-    // executes and that the engine is dealloc'ed at the end of the above block on a background
-    // thread. FlutterEngine is not safe to release on any thread other than the main thread.
-    //
-    // self is never nil here since it's a strong reference that's verified non-nil above, but we
-    // use a conditional check to avoid an unused expression compiler warning.
+    // self is never nil here, but we use a conditional check to avoid an
+    // unused expression compiler warning.
     FlutterEngine* strongSelf = self;
     if (!strongSelf) {
       return;
     }
+    [strongSelf->_firstFrameWaiters removeObject:waiter];
     callback(didTimeout);
   });
 }

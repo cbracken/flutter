@@ -66,7 +66,10 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)notifyLowMemory;
 
 /// Asynchronously waits until the first frame is presented or the timeout is exceeded, then invokes
-/// callback.
+/// callback on the main thread.
+///
+/// Must be called on the platform thread. Invokes callback with didTimeout YES if the engine is not
+/// running, or is destroyed before a first frame is presented.
 - (void)waitForFirstFrame:(NSTimeInterval)timeout callback:(void (^)(BOOL didTimeout))callback;
 
 /**

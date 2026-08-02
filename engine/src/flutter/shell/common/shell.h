@@ -9,6 +9,7 @@
 #include <mutex>
 #include <string_view>
 #include <unordered_map>
+#include <vector>
 
 #include "flutter/assets/directory_asset_bundle.h"
 #include "flutter/common/graphics/texture.h"
@@ -368,6 +369,27 @@ class Shell final : public PlatformView::Delegate,
   void CancelWaitForFirstFrame();
 
   //----------------------------------------------------------------------------
+  /// @brief      Registers a closure to be invoked once a frame has been
+  ///             presented for the first time since the platform view was
+  ///             created.
+  ///
+  ///             Must be called on the platform thread. If a first frame has
+  ///             already been presented, the closure is invoked synchronously
+  ///             on the calling thread before this method returns; otherwise
+  ///             it is invoked on the raster thread immediately after the
+  ///             first frame is presented. Closures still pending when the
+  ///             shell is destroyed are dropped without being invoked.
+  ///
+  ///             Closures must be cheap (e.g. signal an event owned by the
+  ///             registrant) and must not call back into the Shell: they may
+  ///             be invoked on the raster thread while the shell is being
+  ///             destroyed on the platform thread.
+  ///
+  /// @param[in]  closure  The closure to invoke on first frame.
+  ///
+  void AddFirstFrameCallback(fml::closure closure);
+
+  //----------------------------------------------------------------------------
   /// @brief      Used by embedders to reload the system fonts in
   ///             FontCollection.
   ///             It also clears the cached font families and send system
@@ -523,10 +545,12 @@ class Shell final : public PlatformView::Delegate,
 
   bool first_frame_rasterized_ = false;
 
-  // True if a first frame has not yet been rendered.
+  // True if a first frame has not yet been rendered since the platform view
+  // was created.
   //
-  // This is read and written lock-free on the raster thread, and read under
-  // waiting_for_first_frame_mutex_ in WaitForFirstFrame.
+  // Written on the raster thread and read on the platform thread, always
+  // under waiting_for_first_frame_mutex_; lock-free reads are used only as a
+  // fast path where a stale value is acceptable.
   std::atomic<bool> waiting_for_first_frame_ = true;
 
   // True when WaitForFirstFrame has been cancelled because the shell is
@@ -534,6 +558,12 @@ class Shell final : public PlatformView::Delegate,
   //
   // Guarded by waiting_for_first_frame_mutex_.
   bool wait_for_first_frame_cancelled_ = false;
+
+  // Closures registered via AddFirstFrameCallback that have not yet been
+  // invoked.
+  //
+  // Guarded by waiting_for_first_frame_mutex_.
+  std::vector<fml::closure> first_frame_callbacks_;
 
   std::mutex waiting_for_first_frame_mutex_;
   std::condition_variable waiting_for_first_frame_condition_;

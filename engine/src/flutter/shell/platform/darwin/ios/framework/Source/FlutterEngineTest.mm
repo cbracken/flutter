@@ -305,6 +305,37 @@ FLUTTER_ASSERT_ARC
   [self waitForExpectations:@[ timeoutFirstFrame ]];
 }
 
+// Regression test for a heap-use-after-free: a caller of
+// -waitForFirstFrame:callback: used to block inside the shell on a background
+// queue with no synchronization against teardown, so -destroyContext could
+// free the shell out from under it. Teardown must now both proceed without
+// waiting out the caller's timeout and unblock the caller promptly, and the
+// waiting thread must never touch the shell.
+- (void)testWaitForFirstFrameUnblockedByEngineDestruction {
+  FlutterEngine* engine = [[FlutterEngine alloc] initWithName:@"foobar"];
+  [engine run];
+  XCTestExpectation* firstFrame = [self expectationWithDescription:@"firstFrame"];
+  [engine waitForFirstFrame:30.0
+                   callback:^(BOOL didTimeout) {
+                     XCTAssertTrue(didTimeout);
+                     [firstFrame fulfill];
+                   }];
+  [engine destroyContext];
+  // Well under the 30 second wait requested above: teardown aborts the wait.
+  [self waitForExpectations:@[ firstFrame ] timeout:5.0];
+}
+
+- (void)testWaitForFirstFrameWithoutRunningEngine {
+  FlutterEngine* engine = [[FlutterEngine alloc] initWithName:@"foobar"];
+  XCTestExpectation* firstFrame = [self expectationWithDescription:@"firstFrame"];
+  [engine waitForFirstFrame:30.0
+                   callback:^(BOOL didTimeout) {
+                     XCTAssertTrue(didTimeout);
+                     [firstFrame fulfill];
+                   }];
+  [self waitForExpectations:@[ firstFrame ] timeout:5.0];
+}
+
 - (void)testSpawn {
   FlutterEngine* engine = [[FlutterEngine alloc] initWithName:@"foobar"];
   [engine run];

@@ -1841,6 +1841,165 @@ TEST_F(ShellTest, WaitForFirstFrameInlined) {
   DestroyShell(std::move(shell), task_runners);
 }
 
+TEST_F(ShellTest, AddFirstFrameCallbackFiresOnRasterThreadAfterFirstFrame) {
+  auto settings = CreateSettingsForFixture();
+  std::unique_ptr<Shell> shell = CreateShell(settings);
+
+  // Create the surface needed by rasterizer
+  PlatformViewNotifyCreated(shell.get());
+
+  auto configuration = RunConfiguration::InferFromSettings(settings);
+  configuration.SetEntrypoint("emptyMain");
+
+  RunEngine(shell.get(), std::move(configuration));
+
+  fml::RefPtr<fml::TaskRunner> raster_runner =
+      shell->GetTaskRunners().GetRasterTaskRunner();
+  fml::AutoResetWaitableEvent first_frame;
+  bool fired_on_raster_thread = false;
+  PostSync(shell->GetTaskRunners().GetPlatformTaskRunner(),
+           [&shell, &raster_runner, &first_frame, &fired_on_raster_thread] {
+             shell->AddFirstFrameCallback(
+                 [&raster_runner, &first_frame, &fired_on_raster_thread] {
+                   fired_on_raster_thread =
+                       raster_runner->RunsTasksOnCurrentThread();
+                   first_frame.Signal();
+                 });
+           });
+
+  PumpOneFrame(shell.get());
+  first_frame.Wait();
+  EXPECT_TRUE(fired_on_raster_thread);
+
+  DestroyShell(std::move(shell));
+}
+
+TEST_F(ShellTest, AddFirstFrameCallbackInvokedImmediatelyWhenFramePresented) {
+  auto settings = CreateSettingsForFixture();
+  std::unique_ptr<Shell> shell = CreateShell(settings);
+
+  // Create the surface needed by rasterizer
+  PlatformViewNotifyCreated(shell.get());
+
+  auto configuration = RunConfiguration::InferFromSettings(settings);
+  configuration.SetEntrypoint("emptyMain");
+
+  RunEngine(shell.get(), std::move(configuration));
+
+  fml::AutoResetWaitableEvent first_frame;
+  PostSync(shell->GetTaskRunners().GetPlatformTaskRunner(),
+           [&shell, &first_frame] {
+             shell->AddFirstFrameCallback([&first_frame] {
+               first_frame.Signal();
+             });
+           });
+  PumpOneFrame(shell.get());
+  first_frame.Wait();
+
+  // Once a first frame has been presented, callbacks are invoked synchronously
+  // on the registering thread.
+  for (int i = 0; i < 100; ++i) {
+    bool invoked = false;
+    PostSync(shell->GetTaskRunners().GetPlatformTaskRunner(),
+             [&shell, &invoked] {
+               shell->AddFirstFrameCallback([&invoked] { invoked = true; });
+               EXPECT_TRUE(invoked);
+             });
+  }
+
+  DestroyShell(std::move(shell));
+}
+
+TEST_F(ShellTest, AddFirstFrameCallbackNotInvokedForZeroSizeFrame) {
+  auto settings = CreateSettingsForFixture();
+  std::unique_ptr<Shell> shell = CreateShell(settings);
+
+  // Create the surface needed by rasterizer
+  PlatformViewNotifyCreated(shell.get());
+
+  auto configuration = RunConfiguration::InferFromSettings(settings);
+  configuration.SetEntrypoint("emptyMain");
+
+  RunEngine(shell.get(), std::move(configuration));
+
+  fml::AutoResetWaitableEvent first_frame;
+  PostSync(shell->GetTaskRunners().GetPlatformTaskRunner(),
+           [&shell, &first_frame] {
+             shell->AddFirstFrameCallback([&first_frame] {
+               first_frame.Signal();
+             });
+           });
+  PumpOneFrame(shell.get(), ViewContent::DummyView({1.0, 0.0, 0.0, 22, 0}));
+  EXPECT_TRUE(first_frame.WaitWithTimeout(fml::TimeDelta::FromMilliseconds(1)));
+
+  DestroyShell(std::move(shell));
+}
+
+// A callback that is registered while the shell is still waiting for its first
+// frame, and never satisfied by one, must be dropped without being invoked
+// when the shell is destroyed. Registrants own any state their closures
+// capture, so an unfired closure must also not require the registrant to
+// outlive the shell (verified under ASAN by the capture below).
+TEST_F(ShellTest, PendingFirstFrameCallbacksDroppedOnShellDestruction) {
+  auto settings = CreateSettingsForFixture();
+  std::unique_ptr<Shell> shell = CreateShell(settings);
+
+  PlatformViewNotifyCreated(shell.get());
+
+  auto configuration = RunConfiguration::InferFromSettings(settings);
+  configuration.SetEntrypoint("emptyMain");
+
+  RunEngine(shell.get(), std::move(configuration));
+
+  // No frame is ever pumped: the callback stays pending until destruction.
+  auto invoked = std::make_shared<bool>(false);
+  PostSync(shell->GetTaskRunners().GetPlatformTaskRunner(),
+           [&shell, invoked] {
+             shell->AddFirstFrameCallback([invoked] { *invoked = true; });
+           });
+
+  DestroyShell(std::move(shell));
+  EXPECT_FALSE(*invoked);
+}
+
+// Pins the part of the AddFirstFrameCallback contract that closures are
+// invoked directly on the raster thread rather than via a task posted to the
+// platform thread: an embedder that blocks a thread on an event signalled by
+// its closure -- even the platform thread itself, which cannot drain its own
+// task queue while blocked -- must be released when the raster thread
+// presents the first frame.
+TEST_F(ShellTest, FirstFrameCallbackUnblocksBlockedPlatformThread) {
+  auto settings = CreateSettingsForFixture();
+  std::unique_ptr<Shell> shell = CreateShell(settings);
+
+  // Create the surface needed by rasterizer
+  PlatformViewNotifyCreated(shell.get());
+
+  auto configuration = RunConfiguration::InferFromSettings(settings);
+  configuration.SetEntrypoint("emptyMain");
+
+  RunEngine(shell.get(), std::move(configuration));
+
+  fml::AutoResetWaitableEvent first_frame;
+  fml::AutoResetWaitableEvent platform_thread_released;
+  bool did_timeout = true;
+  shell->GetTaskRunners().GetPlatformTaskRunner()->PostTask(
+      [&shell, &first_frame, &platform_thread_released, &did_timeout] {
+        shell->AddFirstFrameCallback([&first_frame] { first_frame.Signal(); });
+        did_timeout =
+            first_frame.WaitWithTimeout(fml::TimeDelta::FromSeconds(10));
+        platform_thread_released.Signal();
+      });
+
+  // Drives the frame entirely via the UI and raster threads; the blocked
+  // platform thread takes no part in producing it.
+  PumpOneFrame(shell.get());
+  platform_thread_released.Wait();
+  EXPECT_FALSE(did_timeout);
+
+  DestroyShell(std::move(shell));
+}
+
 static size_t GetRasterizerResourceCacheBytesSync(const Shell& shell) {
   size_t bytes = 0;
   fml::AutoResetWaitableEvent latch;
