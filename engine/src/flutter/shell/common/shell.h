@@ -21,7 +21,6 @@
 #include "flutter/fml/memory/ref_ptr.h"
 #include "flutter/fml/memory/thread_checker.h"
 #include "flutter/fml/memory/weak_ptr.h"
-#include "flutter/fml/status.h"
 #include "flutter/fml/synchronization/sync_switch.h"
 #include "flutter/fml/synchronization/waitable_event.h"
 #include "flutter/fml/thread.h"
@@ -340,35 +339,6 @@ class Shell final : public PlatformView::Delegate,
                                     bool base64_encode);
 
   //----------------------------------------------------------------------------
-  /// @brief      Pauses the calling thread until the first frame is presented.
-  ///
-  /// @param[in]  timeout  The duration to wait before timing out. If this
-  ///                      duration would cause an overflow when added to
-  ///                      std::chrono::steady_clock::now(), this method will
-  ///                      wait indefinitely for the first frame.
-  ///
-  /// @return     'kOk' when the first frame has been presented before the
-  ///             timeout successfully, 'kFailedPrecondition' if called from the
-  ///             GPU or UI thread, 'kDeadlineExceeded' if there is a timeout.
-  ///
-  fml::Status WaitForFirstFrame(fml::TimeDelta timeout);
-
-  //----------------------------------------------------------------------------
-  /// @brief      Unblocks any call to WaitForFirstFrame(), causing it to
-  ///             immediately return 'kAborted' instead of blocking for the
-  ///             full timeout.
-  ///
-  ///             Embedders that pass a reference to the Shell to a thread they
-  ///             do not otherwise synchronize with the shell's destruction
-  ///             must call this, and wait for that thread to finish with the
-  ///             shell, before destroying it. This method only prevents
-  ///             WaitForFirstFrame() from blocking; it does not by itself
-  ///             make it safe to destroy the Shell out from under a caller
-  ///             that has not yet returned from WaitForFirstFrame().
-  ///
-  void CancelWaitForFirstFrame();
-
-  //----------------------------------------------------------------------------
   /// @brief      Registers a closure to be invoked once a frame has been
   ///             presented for the first time since the platform view was
   ///             created.
@@ -553,12 +523,6 @@ class Shell final : public PlatformView::Delegate,
   // fast path where a stale value is acceptable.
   std::atomic<bool> waiting_for_first_frame_ = true;
 
-  // True when WaitForFirstFrame has been cancelled because the shell is
-  // shutting down and waiting threads should be unblocked.
-  //
-  // Guarded by waiting_for_first_frame_mutex_.
-  bool wait_for_first_frame_cancelled_ = false;
-
   // Closures registered via AddFirstFrameCallback that have not yet been
   // invoked.
   //
@@ -566,7 +530,6 @@ class Shell final : public PlatformView::Delegate,
   std::vector<fml::closure> first_frame_callbacks_;
 
   std::mutex waiting_for_first_frame_mutex_;
-  std::condition_variable waiting_for_first_frame_condition_;
 
   // Written in the UI thread and read from the raster thread. Hence make it
   // atomic.

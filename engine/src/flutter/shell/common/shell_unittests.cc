@@ -1196,12 +1196,18 @@ TEST_F(ShellTest, OnPlatformViewDestroyDisablesThreadMerger) {
 
   PumpOneFrame(shell.get(), ViewContent::ImplicitView(100, 100, builder));
 
-  auto result = shell->WaitForFirstFrame(fml::TimeDelta::Max());
-  // Wait for the rasterizer to process the frame. WaitForFirstFrame only waits
-  // for the Animator, but end_frame_callback is called by the Rasterizer.
+  fml::AutoResetWaitableEvent first_frame;
+  PostSync(shell->GetTaskRunners().GetPlatformTaskRunner(),
+           [&shell, &first_frame] {
+             shell->AddFirstFrameCallback([&first_frame] {
+               first_frame.Signal();
+             });
+           });
+  first_frame.Wait();
+  // Wait for the rasterizer to process the frame. The first-frame callback is
+  // fired from the Animator's raster task, but end_frame_callback is called by
+  // the Rasterizer.
   PostSync(shell->GetTaskRunners().GetRasterTaskRunner(), [] {});
-  ASSERT_TRUE(result.ok()) << "Result: " << static_cast<int>(result.code())
-                           << ": " << result.message();
 
   ASSERT_TRUE(raster_thread_merger->IsEnabled());
 
@@ -1670,175 +1676,6 @@ TEST_F(ShellTest, ReportTimingsIsCalledImmediatelyAfterTheFirstFrame) {
   // Check for the immediate callback of the first frame that doesn't wait for
   // the other 9 frames to be rasterized.
   ASSERT_EQ(timestamps.size(), FrameTiming::kCount);
-}
-
-TEST_F(ShellTest, WaitForFirstFrame) {
-  auto settings = CreateSettingsForFixture();
-  std::unique_ptr<Shell> shell = CreateShell(settings);
-
-  // Create the surface needed by rasterizer
-  PlatformViewNotifyCreated(shell.get());
-
-  auto configuration = RunConfiguration::InferFromSettings(settings);
-  configuration.SetEntrypoint("emptyMain");
-
-  RunEngine(shell.get(), std::move(configuration));
-  PumpOneFrame(shell.get());
-  fml::Status result = shell->WaitForFirstFrame(fml::TimeDelta::Max());
-  ASSERT_TRUE(result.ok());
-
-  DestroyShell(std::move(shell));
-}
-
-TEST_F(ShellTest, WaitForFirstFrameZeroSizeFrame) {
-  auto settings = CreateSettingsForFixture();
-  std::unique_ptr<Shell> shell = CreateShell(settings);
-
-  // Create the surface needed by rasterizer
-  PlatformViewNotifyCreated(shell.get());
-
-  auto configuration = RunConfiguration::InferFromSettings(settings);
-  configuration.SetEntrypoint("emptyMain");
-
-  RunEngine(shell.get(), std::move(configuration));
-  PumpOneFrame(shell.get(), ViewContent::DummyView({1.0, 0.0, 0.0, 22, 0}));
-  fml::Status result = shell->WaitForFirstFrame(fml::TimeDelta::Zero());
-  EXPECT_FALSE(result.ok());
-  EXPECT_EQ(result.message(), "timeout");
-  EXPECT_EQ(result.code(), fml::StatusCode::kDeadlineExceeded);
-
-  DestroyShell(std::move(shell));
-}
-
-TEST_F(ShellTest, WaitForFirstFrameTimeout) {
-  auto settings = CreateSettingsForFixture();
-  std::unique_ptr<Shell> shell = CreateShell(settings);
-
-  // Create the surface needed by rasterizer
-  PlatformViewNotifyCreated(shell.get());
-
-  auto configuration = RunConfiguration::InferFromSettings(settings);
-  configuration.SetEntrypoint("emptyMain");
-
-  RunEngine(shell.get(), std::move(configuration));
-  fml::Status result = shell->WaitForFirstFrame(fml::TimeDelta::Zero());
-  ASSERT_FALSE(result.ok());
-  ASSERT_EQ(result.code(), fml::StatusCode::kDeadlineExceeded);
-
-  DestroyShell(std::move(shell));
-}
-
-// Ensure CancelWaitForFirstFrame() correctly causes all tasks blocked on
-// WaitForFirstFrame() to return kAborted.
-//
-// See: b/521830222
-TEST_F(ShellTest, CancelWaitForFirstFrameAllowsSafeShellDestruction) {
-  auto settings = CreateSettingsForFixture();
-  std::unique_ptr<Shell> shell = CreateShell(settings);
-
-  PlatformViewNotifyCreated(shell.get());
-
-  auto configuration = RunConfiguration::InferFromSettings(settings);
-  configuration.SetEntrypoint("emptyMain");
-  RunEngine(shell.get(), std::move(configuration));
-  // No PumpOneFrame: waiting_for_first_frame_ stays true, so
-  // WaitForFirstFrame would otherwise park on the condvar for the full
-  // timeout below.
-
-  fml::AutoResetWaitableEvent bg_has_ref;
-  fml::AutoResetWaitableEvent proceed_with_wait;
-
-  // Background thread holds a raw Shell* obtained while the shell was still
-  // live -- exactly what `strongSelf.shell` (-> `*_shell`) hands the GCD
-  // block in -[FlutterEngine waitForFirstFrame:callback:].
-  Shell* raw_shell = shell.get();
-  fml::Status background_result;
-  std::thread background(
-      [raw_shell, &bg_has_ref, &proceed_with_wait, &background_result] {
-        bg_has_ref.Signal();
-        proceed_with_wait.Wait();
-        // A well-behaved caller must not still be here once the owner has
-        // finished destroying the Shell. CancelWaitForFirstFrame() below makes
-        // sure this call returns promptly instead of blocking for 30 seconds.
-        background_result =
-            raw_shell->WaitForFirstFrame(fml::TimeDelta::FromSeconds(30));
-      });
-
-  bg_has_ref.Wait();
-  proceed_with_wait.Signal();
-
-  // Give the background thread a chance to actually call WaitForFirstFrame()
-  // before it is cancelled below. If it hasn't gotten there yet, cancellation
-  // is still observed safely (and just as fast) the moment it does.
-  std::this_thread::yield();
-
-  fml::TimePoint cancel_start = fml::TimePoint::Now();
-  // Models -[FlutterEngine destroyContext]: cancel any in-flight waiter,
-  // then join it, before freeing the Shell.
-  raw_shell->CancelWaitForFirstFrame();
-  background.join();
-  fml::TimeDelta elapsed = fml::TimePoint::Now() - cancel_start;
-
-  // The whole point of CancelWaitForFirstFrame() is to avoid blocking the
-  // owner for anywhere near the caller's requested timeout.
-  EXPECT_LT(elapsed.ToSecondsF(), 5.0);
-  ASSERT_FALSE(background_result.ok());
-  ASSERT_EQ(background_result.code(), fml::StatusCode::kAborted);
-
-  // Only safe to destroy now that the background thread has been joined,
-  // i.e. is guaranteed to no longer be touching the Shell.
-  DestroyShell(std::move(shell));
-}
-
-TEST_F(ShellTest, WaitForFirstFrameMultiple) {
-  auto settings = CreateSettingsForFixture();
-  std::unique_ptr<Shell> shell = CreateShell(settings);
-
-  // Create the surface needed by rasterizer
-  PlatformViewNotifyCreated(shell.get());
-
-  auto configuration = RunConfiguration::InferFromSettings(settings);
-  configuration.SetEntrypoint("emptyMain");
-
-  RunEngine(shell.get(), std::move(configuration));
-  PumpOneFrame(shell.get());
-  fml::Status result = shell->WaitForFirstFrame(fml::TimeDelta::Max());
-  ASSERT_TRUE(result.ok());
-  for (int i = 0; i < 100; ++i) {
-    result = shell->WaitForFirstFrame(fml::TimeDelta::Zero());
-    ASSERT_TRUE(result.ok());
-  }
-
-  DestroyShell(std::move(shell));
-}
-
-/// Makes sure that WaitForFirstFrame works if we rendered a frame with the
-/// single-thread setup.
-TEST_F(ShellTest, WaitForFirstFrameInlined) {
-  Settings settings = CreateSettingsForFixture();
-  auto task_runner = CreateNewThread();
-  TaskRunners task_runners("test", task_runner, task_runner, task_runner,
-                           task_runner);
-  std::unique_ptr<Shell> shell = CreateShell(settings, task_runners);
-
-  // Create the surface needed by rasterizer
-  PlatformViewNotifyCreated(shell.get());
-
-  auto configuration = RunConfiguration::InferFromSettings(settings);
-  configuration.SetEntrypoint("emptyMain");
-
-  RunEngine(shell.get(), std::move(configuration));
-  PumpOneFrame(shell.get());
-  fml::AutoResetWaitableEvent event;
-  task_runner->PostTask([&shell, &event] {
-    fml::Status result = shell->WaitForFirstFrame(fml::TimeDelta::Max());
-    ASSERT_FALSE(result.ok());
-    ASSERT_EQ(result.code(), fml::StatusCode::kFailedPrecondition);
-    event.Signal();
-  });
-  ASSERT_FALSE(event.WaitWithTimeout(fml::TimeDelta::Max()));
-
-  DestroyShell(std::move(shell), task_runners);
 }
 
 TEST_F(ShellTest, AddFirstFrameCallbackFiresOnRasterThreadAfterFirstFrame) {
