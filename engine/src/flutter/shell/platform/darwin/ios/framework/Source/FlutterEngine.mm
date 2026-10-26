@@ -12,6 +12,7 @@
 
 #include "flutter/common/constants.h"
 #include "flutter/fml/message_loop.h"
+#include "flutter/fml/message_loop_task_queues.h"
 #include "flutter/fml/platform/darwin/platform_version.h"
 #include "flutter/fml/trace_event.h"
 #include "flutter/runtime/ptrace_check.h"
@@ -1000,17 +1001,25 @@ static void SetEntryPoint(flutter::Settings* settings, NSString* entrypoint, NSS
 
   // The platform and UI threads are always merged on iOS, so the UI task runner is the platform
   // thread's task runner.
+  // Task observers (e.g. the microtask flush registered via Settings::task_observer_add) are
+  // registered on the main thread's fml queue; run them after each task.
+  fml::TaskQueueId main_queue_id = fml::MessageLoop::GetCurrentTaskQueueId();
   fml::RefPtr<fml::TaskRunner> platform_runner = fml::MakeRefCounted<flutter::EmbedderTaskRunner>(
       flutter::EmbedderTaskRunner::DispatchTable{
           .post_task_callback =
-              [](flutter::EmbedderTaskRunner* task_runner, uint64_t task_baton,
-                 fml::TimePoint target_time) {
+              [main_queue_id](flutter::EmbedderTaskRunner* task_runner, uint64_t task_baton,
+                              fml::TimePoint target_time) {
                 fml::RefPtr<flutter::EmbedderTaskRunner> strong_runner(task_runner);
                 [FlutterRunLoop.mainRunLoop
                     performAfterDelay:std::max(0.0,
                                                (target_time - fml::TimePoint::Now()).ToSecondsF())
                                 block:^{
                                   strong_runner->PostTask(task_baton);
+                                  for (const auto& observer :
+                                       fml::MessageLoopTaskQueues::GetInstance()
+                                           ->GetObserversToNotify(main_queue_id)) {
+                                    observer();
+                                  }
                                 }];
               },
           .runs_task_on_current_thread_callback = []() { return [NSThread isMainThread]; },

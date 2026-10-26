@@ -4,6 +4,8 @@
 
 #import "flutter/shell/platform/darwin/ios/framework/Source/FlutterKeyboardManager.h"
 
+#import "flutter/shell/platform/darwin/common/InternalFlutterSwiftCommon/InternalFlutterSwiftCommon.h"
+
 #include "flutter/fml/platform/darwin/message_loop_darwin.h"
 #import "flutter/shell/platform/darwin/common/framework/Headers/FlutterMacros.h"
 
@@ -96,7 +98,7 @@ static constexpr CFTimeInterval kDistantFuture = 1.0e10;
       //
       // We need to run in this mode so that UIKit doesn't give us new
       // events until we are done processing this one.
-      CFRunLoopRunInMode(fml::MessageLoopDarwin::kMessageLoopCFRunLoopMode, kDistantFuture, NO);
+      CFRunLoopRunInMode((__bridge CFStringRef)FlutterRunLoop.runLoopMode, kDistantFuture, NO);
       break;
     }
     case UIPressPhaseChanged:

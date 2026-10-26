@@ -156,6 +156,9 @@ import Foundation
     CFRunLoopTimerSetNextFireDate(timer, nextFireTime)
   }
 
+  /// The private run loop mode in which only Flutter tasks are serviced.
+  @objc public static var runLoopMode: String { flutterRunLoopMode.rawValue as String }
+
   /// Executes single iteration of the run loop in the mode where only Flutter
   /// messages are processed.
   @objc public func pollFlutterMessagesOnce() {
