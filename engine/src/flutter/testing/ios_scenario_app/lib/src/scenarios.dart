@@ -10,6 +10,7 @@ import 'darwin_app_extension_scenario.dart';
 import 'darwin_system_font.dart';
 import 'get_bitmap_scenario.dart';
 import 'initial_route_reply.dart';
+import 'key_event_reply.dart';
 import 'locale_initialization.dart';
 import 'platform_channel_echo.dart';
 import 'platform_view.dart';
@@ -26,6 +27,10 @@ int _viewId = 0;
 Map<String, _ScenarioFactory> _scenarios = <String, _ScenarioFactory>{
   'animated_color_square': (FlutterView view) => AnimatedColorSquareScenario(view),
   'solid_blue': (FlutterView view) => SolidBlueScenario(view),
+  'key_event_reply_sync': (FlutterView view) =>
+      KeyEventReplyScenario(view, replyFromMicrotask: false),
+  'key_event_reply_microtask': (FlutterView view) =>
+      KeyEventReplyScenario(view, replyFromMicrotask: true),
   'locale_initialization': (FlutterView view) => LocaleInitialization(view),
   'platform_view': (FlutterView view) => PlatformViewScenario(view, id: _viewId++),
   'platform_view_no_overlay_intersection': (FlutterView view) =>

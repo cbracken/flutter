@@ -11,6 +11,8 @@
 #include "flutter/fml/platform/darwin/message_loop_darwin.h"
 #import "flutter/shell/platform/darwin/common/framework/Headers/FlutterMacros.h"
 #import "flutter/shell/platform/darwin/ios/InternalFlutterSwift/InternalFlutterSwift.h"
+#import "flutter/shell/platform/darwin/ios/framework/Source/FlutterEngine+TaskRunners.h"
+#import "flutter/shell/platform/darwin/ios/framework/Source/FlutterFMLTaskRunner.h"
 #import "flutter/shell/platform/darwin/ios/framework/Source/FlutterFakeKeyEvents.h"
 #import "flutter/shell/platform/darwin/ios/framework/Source/FlutterKeyboardManager.h"
 #import "flutter/shell/platform/darwin/ios/framework/Source/FlutterViewController_Internal.h"
@@ -28,6 +30,25 @@ namespace {
 typedef void (^KeyCallbackSetter)(FlutterUIPressProxy* press, FlutterAsyncKeyCallback callback)
     API_AVAILABLE(ios(13.4));
 typedef BOOL (^BoolGetter)();
+
+// Creates a timer that runs |block| after |seconds| in every mode of the main run loop.
+//
+// FlutterKeyboardManager waits in a private mode, so this lets the timer fire inside the wait
+// without depending on the mode's name.
+//
+// The caller must invalidate and release the timer.
+CFRunLoopTimerRef CreateTimerInAllMainRunLoopModes(NSTimeInterval seconds, void (^block)(void)) {
+  CFRunLoopTimerRef timer =
+      CFRunLoopTimerCreateWithHandler(kCFAllocatorDefault, CFAbsoluteTimeGetCurrent() + seconds, 0,
+                                      0, 0, ^(CFRunLoopTimerRef firedTimer) {
+                                        block();
+                                      });
+  NSArray<NSString*>* modes = CFBridgingRelease(CFRunLoopCopyAllModes(CFRunLoopGetMain()));
+  for (NSString* mode in modes) {
+    CFRunLoopAddTimer(CFRunLoopGetMain(), timer, (__bridge CFStringRef)mode);
+  }
+  return timer;
+}
 
 }  // namespace
 
@@ -69,6 +90,65 @@ API_AVAILABLE(ios(13.4))
     [invocation setReturnValue:&result];
   }));
   return mock;
+}
+
+// Returns a primary responder that answers "handled" by posting the answer to |taskRunner|, the
+// way PlatformMessageResponseDarwin delivers the framework's answers. The callback stays in
+// |pending| until the answer runs.
+- (id<FlutterKeyPrimaryResponder>)
+    primaryResponderAnsweringVia:(FlutterFMLTaskRunner*)taskRunner
+                pendingCallbacks:(NSMutableArray<FlutterAsyncKeyCallback>*)pending {
+  id<FlutterKeyPrimaryResponder> mock =
+      OCMStrictProtocolMock(@protocol(FlutterKeyPrimaryResponder));
+  OCMStub([mock handlePress:[OCMArg any] callback:[OCMArg any]])
+      .andDo((^(NSInvocation* invocation) {
+        __unsafe_unretained FlutterAsyncKeyCallback callbackUnsafe;
+        [invocation getArgument:&callbackUnsafe atIndex:3];
+        [pending addObject:[callbackUnsafe copy]];
+        [taskRunner postTask:^{
+          FlutterAsyncKeyCallback callback = pending.firstObject;
+          if (callback) {
+            [pending removeObjectAtIndex:0];
+            callback(YES);
+          }
+        }];
+      }));
+  return mock;
+}
+
+// The framework's answer to a key press reaches the primary responder as a task posted to the
+// engine's platform task runner. The keyboard manager blocks the main thread in a nested run loop
+// until the answer arrives, so the task must run inside that run loop.
+- (void)testAnswerPostedToEnginePlatformTaskRunnerCompletesPress {
+  FlutterEngine* engine = [[FlutterEngine alloc] initWithName:@"test" project:nil];
+  XCTAssertTrue([engine run]);
+  NSMutableArray<FlutterAsyncKeyCallback>* pending = [NSMutableArray array];
+  FlutterKeyboardManager* manager = [[FlutterKeyboardManager alloc] init];
+  [manager addPrimaryResponder:[self primaryResponderAnsweringVia:engine.platformTaskRunner
+                                                 pendingCallbacks:pending]];
+
+  // If the answer never runs, answer "not handled" so that the test fails instead of hanging.
+  __block BOOL watchdogFired = NO;
+  CFRunLoopTimerRef watchdog = CreateTimerInAllMainRunLoopModes(3.0, ^{
+    FlutterAsyncKeyCallback callback = pending.firstObject;
+    if (callback) {
+      [pending removeObjectAtIndex:0];
+      watchdogFired = YES;
+      callback(NO);
+    }
+  });
+  __block BOOL nextActionCalled = NO;
+  [manager handlePress:keyDownEvent(UIKeyboardHIDUsageKeyboardA)
+            nextAction:^{
+              nextActionCalled = YES;
+            }];
+  CFRunLoopTimerInvalidate(watchdog);
+  CFRelease(watchdog);
+  [engine destroyContext];
+
+  XCTAssertFalse(watchdogFired, @"The answer posted to the platform task runner did not run while "
+                                @"the keyboard manager was waiting for it.");
+  XCTAssertFalse(nextActionCalled);
 }
 
 - (void)testNextResponderShouldThrowOnPressesEnded {

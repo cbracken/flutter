@@ -113,3 +113,163 @@ FLUTTER_ASSERT_ARC
 }
 
 @end
+
+#pragma mark - Hardware keyboard UIKit fakes
+
+@interface KeyboardAnswerTestKey : UIKey
+@end
+
+@implementation KeyboardAnswerTestKey
+- (UIKeyboardHIDUsage)keyCode {
+  return UIKeyboardHIDUsageKeyboardA;
+}
+- (UIKeyModifierFlags)modifierFlags {
+  return 0;
+}
+- (NSString*)characters {
+  return @"a";
+}
+- (NSString*)charactersIgnoringModifiers {
+  return @"a";
+}
+@end
+
+@interface KeyboardAnswerTestPress : UIPress
+@end
+
+@implementation KeyboardAnswerTestPress {
+  UIKey* _testKey;
+}
+- (instancetype)init {
+  self = [super init];
+  if (self) {
+    _testKey = [[KeyboardAnswerTestKey alloc] init];
+  }
+  return self;
+}
+- (UIPressPhase)phase {
+  return UIPressPhaseBegan;
+}
+- (UIKey*)key {
+  return _testKey;
+}
+@end
+
+@interface KeyboardAnswerTestPressesEvent : UIPressesEvent
+@end
+
+@implementation KeyboardAnswerTestPressesEvent
+- (UIEventType)type {
+  return UIEventTypePresses;
+}
+- (NSTimeInterval)timestamp {
+  return 1.0;
+}
+@end
+
+static const NSTimeInterval kKeyPressWatchdogSeconds = 3.0;
+
+// Creates a timer that runs |block| after |seconds| in every mode of the main run loop.
+//
+// FlutterKeyboardManager waits in a private mode, so this lets the timer fire inside the wait
+// without depending on the name of the mode.
+//
+// The caller must invalidate and release the timer.
+static CFRunLoopTimerRef CreateTimerInAllMainRunLoopModes(NSTimeInterval seconds,
+                                                          void (^block)(void)) {
+  CFRunLoopTimerRef timer =
+      CFRunLoopTimerCreateWithHandler(kCFAllocatorDefault, CFAbsoluteTimeGetCurrent() + seconds, 0,
+                                      0, 0, ^(CFRunLoopTimerRef firedTimer) {
+                                        block();
+                                      });
+  NSArray<NSString*>* modes = CFBridgingRelease(CFRunLoopCopyAllModes(CFRunLoopGetMain()));
+  for (NSString* mode in modes) {
+    CFRunLoopAddTimer(CFRunLoopGetMain(), timer, (__bridge CFStringRef)mode);
+  }
+  return timer;
+}
+
+// Sends a hardware key press to a FlutterViewController whose Dart side answers both key channels.
+//
+// FlutterKeyboardManager blocks the main thread in a nested run loop until the framework response
+// has been received by both primary responders.
+//
+// Each answer arrives as a task posted to the platform task runner. The answer on flutter/keyevent
+// is produced from a microtask, to emulate framework behavior. The press only completes if both
+// kinds of task run inside the nested run loop.
+@interface HardwareKeyboardAnswerTest : XCTestCase
+@end
+
+@implementation HardwareKeyboardAnswerTest
+
+- (void)testKeyPressCompletesWhenKeyEventAnswerIsSynchronous {
+  [self verifyKeyPressCompletesWithScenario:@"key_event_reply_sync"];
+}
+
+- (void)testKeyPressCompletesWhenKeyEventAnswerComesFromMicrotask {
+  [self verifyKeyPressCompletesWithScenario:@"key_event_reply_microtask"];
+}
+
+- (void)verifyKeyPressCompletesWithScenario:(NSString*)scenario {
+  FlutterEngine* engine = [[FlutterEngine alloc] initWithName:@"keyboard_answer" project:nil];
+  FlutterViewController* viewController = [self viewControllerForEngine:engine scenario:scenario];
+
+  // If the responses never arrive, stop the innermost run loop (the keyboard manager's
+  // wait), so the test fails instead of hanging.
+  __block BOOL watchdogFired = NO;
+  CFRunLoopTimerRef watchdog = CreateTimerInAllMainRunLoopModes(kKeyPressWatchdogSeconds, ^{
+    watchdogFired = YES;
+    CFRunLoopStop(CFRunLoopGetCurrent());
+  });
+  CFAbsoluteTime start = CFAbsoluteTimeGetCurrent();
+  [viewController pressesBegan:[NSSet setWithObject:[[KeyboardAnswerTestPress alloc] init]]
+                     withEvent:[[KeyboardAnswerTestPressesEvent alloc] init]];
+  CFTimeInterval blocked = CFAbsoluteTimeGetCurrent() - start;
+  CFRunLoopTimerInvalidate(watchdog);
+  CFRelease(watchdog);
+
+  // Deliver any late answers inside a run loop that this test controls, then shut down.
+  NSDate* deadline = [NSDate dateWithTimeIntervalSinceNow:0.5];
+  while (deadline.timeIntervalSinceNow > 0) {
+    [[NSRunLoop mainRunLoop] runMode:NSDefaultRunLoopMode beforeDate:deadline];
+  }
+  [engine destroyContext];
+
+  NSLog(@"KEYBOARD_ANSWER scenario=%@ watchdogFired=%d blocked=%.3fs", scenario, watchdogFired,
+        blocked);
+  XCTAssertFalse(watchdogFired,
+                 @"pressesBegan:withEvent: was still waiting for the framework's answers after "
+                 @"%.0f seconds.",
+                 kKeyPressWatchdogSeconds);
+}
+
+// Runs |engine| with |scenario| and returns a view controller whose key responders are
+// registered, once the scenario has installed its key channel handlers.
+- (FlutterViewController*)viewControllerForEngine:(FlutterEngine*)engine
+                                         scenario:(NSString*)scenario {
+  XCTAssertTrue([engine runWithEntrypoint:nil]);
+  XCTestExpectation* ready = [self expectationWithDescription:@"key handlers installed"];
+  __weak FlutterEngine* weakEngine = engine;
+  [engine.binaryMessenger
+      setMessageHandlerOnChannel:@"waiting_for_status"
+            binaryMessageHandler:^(NSData* message, FlutterBinaryReply reply) {
+              FlutterMethodChannel* driver = [FlutterMethodChannel
+                  methodChannelWithName:@"driver"
+                        binaryMessenger:weakEngine.binaryMessenger
+                                  codec:[FlutterJSONMethodCodec sharedInstance]];
+              [driver invokeMethod:@"set_scenario" arguments:@{@"name" : scenario}];
+            }];
+  [engine.binaryMessenger setMessageHandlerOnChannel:@"key_event_reply_ready"
+                                binaryMessageHandler:^(NSData* message, FlutterBinaryReply reply) {
+                                  [ready fulfill];
+                                }];
+  FlutterViewController* viewController = [[FlutterViewController alloc] initWithEngine:engine
+                                                                                nibName:nil
+                                                                                 bundle:nil];
+  // viewDidLoad registers the key responders.
+  [viewController loadViewIfNeeded];
+  [self waitForExpectations:@[ ready ] timeout:30.0];
+  return viewController;
+}
+
+@end
