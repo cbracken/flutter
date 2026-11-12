@@ -9,7 +9,10 @@
 #include <vector>
 
 #include "flutter/flow/embedded_views.h"
+#import "flutter/shell/platform/darwin/ios/framework/Source/FlutterFMLTaskRunner.h"
 #import "flutter/shell/platform/darwin/ios/framework/Source/FlutterPlatformViews_Internal.h"
+#include "flutter/shell/platform/darwin/ios/framework/Source/overlay_layer_pool.h"
+#import "flutter/shell/platform/darwin/ios/ios_context.h"
 
 namespace flutter {
 
@@ -25,6 +28,29 @@ class IOSExternalViewEmbedder : public ExternalViewEmbedder {
  private:
   __weak FlutterPlatformViewsController* platform_views_controller_;
   std::shared_ptr<IOSContext> ios_context_;
+
+  // The task runner that the overlay layers were created on, or nil if none
+  // have been created.
+  // The destructor posts the layer pool to it, since the controller may already
+  // be deallocated.
+  FlutterFMLTaskRunner* platform_task_runner_;
+
+  // The pool of reusable view layers. The pool allows to recycle layer in each
+  // frame.
+  //
+  // The layers are created and destroyed on the platform thread.
+  // All other access is on the raster thread.
+  std::shared_ptr<OverlayLayerPool> layer_pool_;
+
+  // Whether the previous frame had any platform views in active composition
+  // order.
+  //
+  // This state is tracked so that the first frame after removing the last
+  // platform view runs through the platform view rendering code path, giving us
+  // a chance to remove the platform view from the UIView hierarchy.
+  //
+  // Only accessed from the raster thread.
+  bool had_platform_views_ = false;
 
   // The state of the current frame.
   //
@@ -55,6 +81,16 @@ class IOSExternalViewEmbedder : public ExternalViewEmbedder {
   // Clears the composition order, composition parameters, slices, and visited
   // platform views.
   void ResetFrameState();
+
+  // Encode rendering for the Flutter overlay views and queue up perform
+  // platform view mutations.
+  void SubmitFrame(std::unique_ptr<SurfaceFrame> background_frame);
+
+  // Populate any missing overlay layers.
+  //
+  // This requires posting a task to the platform thread and blocking on its
+  // completion.
+  void CreateMissingOverlays(size_t required_overlay_layers);
 
   // |ExternalViewEmbedder|
   DlCanvas* GetRootCanvas() override;
