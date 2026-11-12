@@ -26,11 +26,13 @@ FLUTTER_ASSERT_ARC
 - (instancetype)initWithLayers:(NSArray<FlutterPlatformViewLayer*>*)layers
                       overlays:(NSDictionary<NSNumber*, FlutterPlatformViewOverlay*>*)overlays
             unusedOverlayViews:(NSArray<UIView*>*)unusedOverlayViews
+              devicePixelRatio:(CGFloat)devicePixelRatio
                        present:(void (^)(void))present {
   if (self = [super init]) {
     _layers = [layers copy];
     _overlays = [overlays copy];
     _unusedOverlayViews = [unusedOverlayViews copy];
+    _devicePixelRatio = devicePixelRatio;
     _present = [present copy];
   }
   return self;
