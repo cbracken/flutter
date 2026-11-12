@@ -133,24 +133,28 @@ static void ResetAnchor(CALayer* layer) {
 ///
 /// `viewId` is the ID of the platform view that the overlay is painted above, and `overlayId` is
 /// the index of the overlay among the overlays in the frame.
+/// This method divides by `devicePixelRatio` to convert the overlay's rect from physical pixels to
+/// points.
 ///
 /// Must run on the platform thread.
 - (void)updateOverlay:(FlutterPlatformViewOverlay*)overlay
                viewId:(int64_t)viewId
-            overlayId:(int64_t)overlayId;
+            overlayId:(int64_t)overlayId
+     devicePixelRatio:(CGFloat)devicePixelRatio;
 
 - (void)onCreate:(FlutterMethodCall*)call result:(FlutterResult)result;
 - (void)onDispose:(FlutterMethodCall*)call result:(FlutterResult)result;
 - (void)onAcceptGesture:(FlutterMethodCall*)call result:(FlutterResult)result;
 - (void)onRejectGesture:(FlutterMethodCall*)call result:(FlutterResult)result;
 
-- (void)clipViewSetMaskView:(UIView*)clipView;
+- (void)clipViewSetMaskView:(UIView*)clipView devicePixelRatio:(CGFloat)devicePixelRatio;
 
 // Composites the platform view described by `layer`.
 //
 // This method sets the frames of the view's |ChildClippingView| and
 // |FlutterTouchInterceptingView|, then applies the layer's mutators.
-- (void)compositeLayer:(FlutterPlatformViewLayer*)layer;
+// This method divides by `devicePixelRatio` to convert the layer from physical pixels to points.
+- (void)compositeLayer:(FlutterPlatformViewLayer*)layer devicePixelRatio:(CGFloat)devicePixelRatio;
 
 // Applies the mutators to the UIView chain that was constructed by
 // `ReconstructClipViewsChain`
@@ -160,8 +164,12 @@ static void ResetAnchor(CALayer* layer) {
 //
 // This method is only called when the `embeddedView` needs to be re-composited at the current
 // frame. See: `presentFrame:` for details.
+//
+// This method divides by `devicePixelRatio` to convert the transforms and the backdrop filter rect
+// from physical pixels to points.
 - (void)applyMutators:(NSArray<FlutterPlatformViewMutator*>*)mutators
-         embeddedView:(UIView*)embeddedView;
+         embeddedView:(UIView*)embeddedView
+     devicePixelRatio:(CGFloat)devicePixelRatio;
 
 // Appends the overlay views and platform view and sets their z index based on the composition
 // order.
@@ -406,8 +414,8 @@ static void ResetAnchor(CALayer* layer) {
   }
   _flutterView = flutterView;
 
-  // `applyMutators:embeddedView:` positions clips and backdrop filters relative to the Flutter
-  // view, and does nothing when there is no Flutter view.
+  // `applyMutators:embeddedView:devicePixelRatio:` positions clips and backdrop filters relative to
+  // the Flutter view, and does nothing when there is no Flutter view.
   // Clear the layer of each view so that it is composited in the next frame that includes it.
   for (FlutterPlatformViewInfo* info in self.platformViews.objectEnumerator) {
     info.lastCompositedLayer = nil;
@@ -415,6 +423,7 @@ static void ResetAnchor(CALayer* layer) {
 }
 
 - (void)beginFrameWithSize:(DlISize)frameSize devicePixelRatio:(double)devicePixelRatio {
+  FML_DCHECK(devicePixelRatio > 0);
   [self resetFrameState];
   self.frameSize = frameSize;
   self.devicePixelRatio = devicePixelRatio;
@@ -466,7 +475,7 @@ static void ResetAnchor(CALayer* layer) {
   return -1;
 }
 
-- (void)clipViewSetMaskView:(UIView*)clipView {
+- (void)clipViewSetMaskView:(UIView*)clipView devicePixelRatio:(CGFloat)devicePixelRatio {
   FML_DCHECK([[NSThread currentThread] isMainThread]);
   if (clipView.maskView) {
     return;
@@ -474,11 +483,12 @@ static void ResetAnchor(CALayer* layer) {
   CGRect frame =
       CGRectMake(-clipView.frame.origin.x, -clipView.frame.origin.y,
                  CGRectGetWidth(self.flutterView.bounds), CGRectGetHeight(self.flutterView.bounds));
-  clipView.maskView = [self.maskViewPool getMaskViewWithFrame:frame];
+  clipView.maskView = [self.maskViewPool getMaskViewWithFrame:frame screenScale:devicePixelRatio];
 }
 
 - (void)applyMutators:(NSArray<FlutterPlatformViewMutator*>*)mutators
-         embeddedView:(UIView*)embeddedView {
+         embeddedView:(UIView*)embeddedView
+     devicePixelRatio:(CGFloat)devicePixelRatio {
   if (self.flutterView == nil) {
     return;
   }
@@ -496,7 +506,6 @@ static void ResetAnchor(CALayer* layer) {
     [self.maskViewPool insertViewToPoolIfNeeded:(FlutterClippingMaskView*)(clipView.maskView)];
     clipView.maskView = nil;
   }
-  CGFloat screenScale = [UIScreen mainScreen].scale;
   for (FlutterPlatformViewMutator* mutator in mutators) {
     switch (mutator.type) {
       case FlutterPlatformViewMutatorTypeTransform: {
@@ -504,20 +513,20 @@ static void ResetAnchor(CALayer* layer) {
         break;
       }
       case FlutterPlatformViewMutatorTypeClipRect: {
-        [self clipViewSetMaskView:clipView];
+        [self clipViewSetMaskView:clipView devicePixelRatio:devicePixelRatio];
         [(FlutterClippingMaskView*)clipView.maskView clipRect:mutator.rect matrix:transformMatrix];
         break;
       }
       case FlutterPlatformViewMutatorTypeClipRoundedRect:
       case FlutterPlatformViewMutatorTypeClipRoundedSuperellipse: {
-        [self clipViewSetMaskView:clipView];
+        [self clipViewSetMaskView:clipView devicePixelRatio:devicePixelRatio];
         [(FlutterClippingMaskView*)clipView.maskView clipRRect:mutator.rect
                                                          radii:mutator.cornerRadii
                                                         matrix:transformMatrix];
         break;
       }
       case FlutterPlatformViewMutatorTypeClipPath: {
-        [self clipViewSetMaskView:clipView];
+        [self clipViewSetMaskView:clipView devicePixelRatio:devicePixelRatio];
         [(FlutterClippingMaskView*)clipView.maskView clipPath:mutator.path matrix:transformMatrix];
         break;
       }
@@ -531,7 +540,7 @@ static void ResetAnchor(CALayer* layer) {
         CGRect filterRect = mutator.rect;
         // `filterRect` is in global coordinates. We need to convert to local space.
         filterRect = CGRectApplyAffineTransform(
-            filterRect, CGAffineTransformMakeScale(1 / screenScale, 1 / screenScale));
+            filterRect, CGAffineTransformMakeScale(1 / devicePixelRatio, 1 / devicePixelRatio));
         // `filterRect` reprents the rect that should be filtered inside the `_flutterView`.
         // The `PlatformViewFilter` needs the frame inside the `clipView` that needs to be
         // filtered.
@@ -612,7 +621,7 @@ static void ResetAnchor(CALayer* layer) {
   // However, flow is based on the physical resolution. For example, 1000 pixels in flow equals
   // 500 points in UIKit for devices that has screenScale of 2. We need to scale the transformMatrix
   // down to the logical resoltion before applying it to the layer of PlatformView.
-  CGFloat pointScale = 1.0 / screenScale;
+  CGFloat pointScale = 1.0 / devicePixelRatio;
   transformMatrix =
       CATransform3DConcat(transformMatrix, CATransform3DMakeScale(pointScale, pointScale, 1));
 
@@ -633,13 +642,14 @@ static void ResetAnchor(CALayer* layer) {
 - (void)compositeView:(int64_t)viewId withParams:(const flutter::EmbeddedViewParams&)params {
   CGFloat screenScale = [UIScreen mainScreen].scale;
   [self compositeLayer:flutter::GetPlatformViewLayerFromEmbeddedViewParams(viewId, params,
-                                                                           screenScale)];
+                                                                           screenScale)
+      devicePixelRatio:screenScale];
 }
 
-- (void)compositeLayer:(FlutterPlatformViewLayer*)layer {
-  CGFloat screenScale = [UIScreen mainScreen].scale;
+- (void)compositeLayer:(FlutterPlatformViewLayer*)layer devicePixelRatio:(CGFloat)devicePixelRatio {
   // TODO(https://github.com/flutter/flutter/issues/109700)
-  CGRect frame = CGRectMake(0, 0, layer.size.width / screenScale, layer.size.height / screenScale);
+  CGRect frame =
+      CGRectMake(0, 0, layer.size.width / devicePixelRatio, layer.size.height / devicePixelRatio);
   FlutterTouchInterceptingView* touchInterceptor =
       self.platformViews[@(layer.viewId)].touchInterceptor;
   touchInterceptor.layer.transform = CATransform3DIdentity;
@@ -649,12 +659,15 @@ static void ResetAnchor(CALayer* layer) {
   UIView* clippingView = self.platformViews[@(layer.viewId)].rootView;
   // The frame of the clipping view should be the final bounding rect.
   // Because the translate matrix in the Mutator Stack also includes the offset,
-  // when we apply the transforms matrix in |applyMutators:embeddedView:|, we need
+  // when we apply the transforms matrix in |applyMutators:embeddedView:devicePixelRatio:|, we need
   // to remember to do a reverse translate.
   CGRect rect = layer.boundingRect;
-  clippingView.frame = CGRectMake(rect.origin.x / screenScale, rect.origin.y / screenScale,
-                                  rect.size.width / screenScale, rect.size.height / screenScale);
-  [self applyMutators:layer.mutators embeddedView:touchInterceptor];
+  clippingView.frame =
+      CGRectMake(rect.origin.x / devicePixelRatio, rect.origin.y / devicePixelRatio,
+                 rect.size.width / devicePixelRatio, rect.size.height / devicePixelRatio);
+  [self applyMutators:layer.mutators
+          embeddedView:touchInterceptor
+      devicePixelRatio:devicePixelRatio];
 }
 
 - (flutter::DlCanvas*)compositeEmbeddedViewWithId:(int64_t)viewId {
@@ -812,6 +825,7 @@ static void ResetAnchor(CALayer* layer) {
       [[FlutterPlatformViewFrame alloc] initWithLayers:layers
                                               overlays:overlays
                                     unusedOverlayViews:unusedOverlayViews
+                                      devicePixelRatio:self.devicePixelRatio
                                                present:^{
                                                  present();
                                                }];
@@ -875,7 +889,10 @@ static void ResetAnchor(CALayer* layer) {
     if (overlay == nil) {
       continue;
     }
-    [self updateOverlay:overlay viewId:layer.viewId overlayId:overlayId];
+    [self updateOverlay:overlay
+                  viewId:layer.viewId
+               overlayId:overlayId
+        devicePixelRatio:frame.devicePixelRatio];
     overlayId++;
   }
 
@@ -891,7 +908,7 @@ static void ResetAnchor(CALayer* layer) {
     if ([info.lastCompositedLayer isEqual:layer]) {
       continue;
     }
-    [self compositeLayer:layer];
+    [self compositeLayer:layer devicePixelRatio:frame.devicePixelRatio];
     info.lastCompositedLayer = layer;
   }
 
@@ -910,14 +927,14 @@ static void ResetAnchor(CALayer* layer) {
 
 - (void)updateOverlay:(FlutterPlatformViewOverlay*)overlay
                viewId:(int64_t)viewId
-            overlayId:(int64_t)overlayId {
-  CGFloat screenScale = [UIScreen mainScreen].scale;
+            overlayId:(int64_t)overlayId
+     devicePixelRatio:(CGFloat)devicePixelRatio {
   // Set the size of the wrapper view.
   // This wrapper view masks the overlay view.
   CGRect rect = overlay.rect;
   overlay.wrapperView.frame =
-      CGRectMake(rect.origin.x / screenScale, rect.origin.y / screenScale,
-                 rect.size.width / screenScale, rect.size.height / screenScale);
+      CGRectMake(rect.origin.x / devicePixelRatio, rect.origin.y / devicePixelRatio,
+                 rect.size.width / devicePixelRatio, rect.size.height / devicePixelRatio);
   // Set a unique view identifier, so the wrapper view can be identified in XCUITests.
   overlay.wrapperView.accessibilityIdentifier =
       [NSString stringWithFormat:@"platform_view[%lld].overlay[%lld]", viewId, overlayId];

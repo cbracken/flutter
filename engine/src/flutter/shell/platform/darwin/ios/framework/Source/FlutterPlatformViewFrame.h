@@ -46,6 +46,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// `FlutterPlatformViewsController` removes them from the Flutter view in `presentFrame:`.
 @property(nonatomic, readonly) NSArray<UIView*>* unusedOverlayViews;
 
+/// The number of physical pixels per point in the frame.
+///
+/// `FlutterPlatformViewsController` divides the rects, sizes, and transforms of the frame's layers
+/// and overlays by this to convert them from physical pixels to points.
+@property(nonatomic, readonly) CGFloat devicePixelRatio;
+
 /// Presents the Flutter content of the frame.
 ///
 /// `FlutterPlatformViewsController` calls this block in the same `CATransaction` in which it
@@ -57,6 +63,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (instancetype)initWithLayers:(NSArray<FlutterPlatformViewLayer*>*)layers
                       overlays:(NSDictionary<NSNumber*, FlutterPlatformViewOverlay*>*)overlays
             unusedOverlayViews:(NSArray<UIView*>*)unusedOverlayViews
+              devicePixelRatio:(CGFloat)devicePixelRatio
                        present:(void (^)(void))present NS_DESIGNATED_INITIALIZER;
 
 @end
