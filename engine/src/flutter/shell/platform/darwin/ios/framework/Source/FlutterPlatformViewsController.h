@@ -76,7 +76,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// Called from the raster thread.
 - (flutter::DlCanvas*)compositeEmbeddedViewWithId:(int64_t)viewId;
 
-/// @brief Discards all platform views instances and auxiliary resources.
+/// @brief Discards all platform views instances and removes their views from the Flutter view.
 ///
 /// Called from the platform thread during hot restart.
 - (void)reset;
