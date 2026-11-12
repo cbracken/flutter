@@ -20,6 +20,7 @@
 #import "flutter/shell/platform/darwin/ios/framework/Source/FlutterPlatformViewsTestHelper.h"
 #import "flutter/shell/platform/darwin/ios/framework/Source/FlutterPlatformViews_Internal.h"
 #import "flutter/shell/platform/darwin/ios/framework/Source/FlutterTouchInterceptingView+Test.h"
+#import "flutter/shell/platform/darwin/ios/platform_view_layer_conversion.h"
 
 FLUTTER_ASSERT_ARC
 
@@ -281,6 +282,16 @@ namespace {
 using namespace flutter::testing;
 }  // namespace
 
+// Composites the platform view with `viewId` from the layer that `params` converts to.
+static void CompositeView(FlutterPlatformViewsController* controller,
+                          int64_t viewId,
+                          const flutter::EmbeddedViewParams& params) {
+  CGFloat screenScale = [UIScreen mainScreen].scale;
+  FlutterPlatformViewLayer* layer =
+      flutter::GetPlatformViewLayerFromEmbeddedViewParams(viewId, params, screenScale);
+  [controller compositeLayer:layer devicePixelRatio:screenScale];
+}
+
 // Walks up the superview chain from the given view and returns the first
 // FlutterTouchInterceptingView found, or nil if none exists.
 static FlutterTouchInterceptingView* FindTouchInterceptingView(UIView* view) {
@@ -493,11 +504,7 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   auto embeddedViewParams = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix, flutter::DlSize(10, 10), stack);
 
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:2
-                                                    withParams:std::move(embeddedViewParams)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
+  CompositeView(flutterPlatformViewsController, 2, *embeddedViewParams);
 
   XCTAssertTrue([gMockPlatformView.superview.superview isKindOfClass:[ChildClippingView class]]);
   ChildClippingView* childClippingView = (ChildClippingView*)gMockPlatformView.superview.superview;
@@ -565,11 +572,7 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   auto embeddedViewParams = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix, flutter::DlSize(5, 10), stack);
 
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:2
-                                                    withParams:std::move(embeddedViewParams)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
+  CompositeView(flutterPlatformViewsController, 2, *embeddedViewParams);
 
   XCTAssertTrue([gMockPlatformView.superview.superview isKindOfClass:[ChildClippingView class]]);
   ChildClippingView* childClippingView = (ChildClippingView*)gMockPlatformView.superview.superview;
@@ -634,11 +637,7 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   auto embeddedViewParams = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix, flutter::DlSize(20, 20), stack);
 
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:2
-                                                    withParams:std::move(embeddedViewParams)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
+  CompositeView(flutterPlatformViewsController, 2, *embeddedViewParams);
 
   XCTAssertTrue([gMockPlatformView.superview.superview isKindOfClass:ChildClippingView.class]);
   ChildClippingView* childClippingView = (ChildClippingView*)gMockPlatformView.superview.superview;
@@ -700,11 +699,7 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   auto embeddedViewParams = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix, flutter::DlSize(10, 10), stack);
 
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:2
-                                                    withParams:std::move(embeddedViewParams)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
+  CompositeView(flutterPlatformViewsController, 2, *embeddedViewParams);
 
   XCTAssertTrue([gMockPlatformView.superview.superview isKindOfClass:[ChildClippingView class]]);
   ChildClippingView* childClippingView = (ChildClippingView*)gMockPlatformView.superview.superview;
@@ -742,11 +737,7 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   embeddedViewParams = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix, flutter::DlSize(10, 10), stack2);
 
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:2
-                                                    withParams:std::move(embeddedViewParams)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
+  CompositeView(flutterPlatformViewsController, 2, *embeddedViewParams);
 
   [flutterView setNeedsLayout];
   [flutterView layoutIfNeeded];
@@ -816,11 +807,7 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   auto embeddedViewParams = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix, flutter::DlSize(10, 10), stack);
 
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:2
-                                                    withParams:std::move(embeddedViewParams)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
+  CompositeView(flutterPlatformViewsController, 2, *embeddedViewParams);
 
   XCTAssertTrue([gMockPlatformView.superview.superview isKindOfClass:ChildClippingView.class]);
   ChildClippingView* childClippingView = (ChildClippingView*)gMockPlatformView.superview.superview;
@@ -856,11 +843,7 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   embeddedViewParams = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix, flutter::DlSize(10, 10), stack2);
 
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:2
-                                                    withParams:std::move(embeddedViewParams)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
+  CompositeView(flutterPlatformViewsController, 2, *embeddedViewParams);
 
   [flutterView setNeedsLayout];
   [flutterView layoutIfNeeded];
@@ -899,11 +882,7 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   embeddedViewParams = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix, flutter::DlSize(10, 10), stack2);
 
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:2
-                                                    withParams:std::move(embeddedViewParams)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
+  CompositeView(flutterPlatformViewsController, 2, *embeddedViewParams);
 
   [flutterView setNeedsLayout];
   [flutterView layoutIfNeeded];
@@ -957,11 +936,7 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   auto embeddedViewParams = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix, flutter::DlSize(10, 10), stack);
 
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:2
-                                                    withParams:std::move(embeddedViewParams)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
+  CompositeView(flutterPlatformViewsController, 2, *embeddedViewParams);
 
   XCTAssertTrue([gMockPlatformView.superview.superview isKindOfClass:ChildClippingView.class]);
   ChildClippingView* childClippingView = (ChildClippingView*)gMockPlatformView.superview.superview;
@@ -1005,11 +980,7 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   embeddedViewParams = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix, flutter::DlSize(10, 10), stack2);
 
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:2
-                                                    withParams:std::move(embeddedViewParams)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
+  CompositeView(flutterPlatformViewsController, 2, *embeddedViewParams);
 
   [flutterView setNeedsLayout];
   [flutterView layoutIfNeeded];
@@ -1063,11 +1034,7 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   embeddedViewParams = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix, flutter::DlSize(10, 10), stack2);
 
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:2
-                                                    withParams:std::move(embeddedViewParams)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
+  CompositeView(flutterPlatformViewsController, 2, *embeddedViewParams);
 
   [flutterView setNeedsLayout];
   [flutterView layoutIfNeeded];
@@ -1119,11 +1086,7 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   embeddedViewParams = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix, flutter::DlSize(10, 10), stack2);
 
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:2
-                                                    withParams:std::move(embeddedViewParams)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
+  CompositeView(flutterPlatformViewsController, 2, *embeddedViewParams);
 
   [flutterView setNeedsLayout];
   [flutterView layoutIfNeeded];
@@ -1172,11 +1135,7 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   embeddedViewParams = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix, flutter::DlSize(10, 10), stack2);
 
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:2
-                                                    withParams:std::move(embeddedViewParams)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
+  CompositeView(flutterPlatformViewsController, 2, *embeddedViewParams);
 
   [flutterView setNeedsLayout];
   [flutterView layoutIfNeeded];
@@ -1243,11 +1202,7 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   auto embeddedViewParams = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix, flutter::DlSize(10, 10), stack);
 
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:2
-                                                    withParams:std::move(embeddedViewParams)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
+  CompositeView(flutterPlatformViewsController, 2, *embeddedViewParams);
 
   XCTAssertTrue([gMockPlatformView.superview.superview isKindOfClass:[ChildClippingView class]]);
   ChildClippingView* childClippingView = (ChildClippingView*)gMockPlatformView.superview.superview;
@@ -1287,11 +1242,7 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   embeddedViewParams = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix, flutter::DlSize(10, 10), stack2);
 
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:2
-                                                    withParams:std::move(embeddedViewParams)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
+  CompositeView(flutterPlatformViewsController, 2, *embeddedViewParams);
 
   [flutterView setNeedsLayout];
   [flutterView layoutIfNeeded];
@@ -1330,11 +1281,7 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   embeddedViewParams = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix, flutter::DlSize(10, 10), stack2);
 
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:2
-                                                    withParams:std::move(embeddedViewParams)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
+  CompositeView(flutterPlatformViewsController, 2, *embeddedViewParams);
 
   [flutterView setNeedsLayout];
   [flutterView layoutIfNeeded];
@@ -1373,11 +1320,7 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   embeddedViewParams = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix, flutter::DlSize(10, 10), stack2);
 
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:2
-                                                    withParams:std::move(embeddedViewParams)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
+  CompositeView(flutterPlatformViewsController, 2, *embeddedViewParams);
 
   [flutterView setNeedsLayout];
   [flutterView layoutIfNeeded];
@@ -1410,11 +1353,7 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   embeddedViewParams = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix, flutter::DlSize(10, 10), stack2);
 
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:2
-                                                    withParams:std::move(embeddedViewParams)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
+  CompositeView(flutterPlatformViewsController, 2, *embeddedViewParams);
 
   [flutterView setNeedsLayout];
   [flutterView layoutIfNeeded];
@@ -1552,11 +1491,7 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   auto embeddedViewParams = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix, flutter::DlSize(10, 10), stack);
 
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:2
-                                                    withParams:std::move(embeddedViewParams)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
+  CompositeView(flutterPlatformViewsController, 2, *embeddedViewParams);
 
   XCTAssertTrue([gMockPlatformView.superview.superview isKindOfClass:[ChildClippingView class]]);
   ChildClippingView* childClippingView = (ChildClippingView*)gMockPlatformView.superview.superview;
@@ -1621,11 +1556,7 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   auto embeddedViewParams = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix, flutter::DlSize(10, 10), stack);
 
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:2
-                                                    withParams:std::move(embeddedViewParams)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
+  CompositeView(flutterPlatformViewsController, 2, *embeddedViewParams);
 
   XCTAssertTrue([gMockPlatformView.superview.superview isKindOfClass:[ChildClippingView class]]);
   ChildClippingView* childClippingView = (ChildClippingView*)gMockPlatformView.superview.superview;
@@ -1708,11 +1639,7 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   auto embeddedViewParams =
       std::make_unique<flutter::EmbeddedViewParams>(finalMatrix, flutter::DlSize(300, 300), stack);
 
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:2
-                                                    withParams:std::move(embeddedViewParams)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
+  CompositeView(flutterPlatformViewsController, 2, *embeddedViewParams);
 
   CGRect platformViewRectInFlutterView = [gMockPlatformView convertRect:gMockPlatformView.bounds
                                                                  toView:flutterView];
@@ -1763,9 +1690,8 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
       pushFilterToVisitedPlatformViews:filter
                               withRect:flutter::DlRect::MakeXYWH(0, 0, screenScale * 10,
                                                                  screenScale * 10)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
+  [flutterPlatformViewsController submitFrame:CreateTestSurfaceFrame()
+                               withIosContext:std::make_shared<FakeIOSContext>()];
 
   XCTAssertTrue([gMockPlatformView.superview.superview isKindOfClass:[ChildClippingView class]]);
   ChildClippingView* childClippingView = (ChildClippingView*)gMockPlatformView.superview.superview;
@@ -1796,9 +1722,8 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
                                     devicePixelRatio:[UIScreen mainScreen].scale];
   [flutterPlatformViewsController prerollCompositeEmbeddedView:2
                                                     withParams:std::move(embeddedViewParams2)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
+  [flutterPlatformViewsController submitFrame:CreateTestSurfaceFrame()
+                               withIosContext:std::make_shared<FakeIOSContext>()];
 
   XCTAssertTrue([gMockPlatformView.superview.superview isKindOfClass:[ChildClippingView class]]);
 
@@ -1853,11 +1778,7 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   auto embeddedViewParams =
       std::make_unique<flutter::EmbeddedViewParams>(finalMatrix, flutter::DlSize(300, 300), stack);
 
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:2
-                                                    withParams:std::move(embeddedViewParams)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
+  CompositeView(flutterPlatformViewsController, 2, *embeddedViewParams);
 
   CGRect platformViewRectInFlutterView = [gMockPlatformView convertRect:gMockPlatformView.bounds
                                                                  toView:flutterView];
@@ -1923,11 +1844,7 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   auto embeddedViewParams = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix * translateMatrix, flutter::DlSize(5, 5), stack);
 
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:2
-                                                    withParams:std::move(embeddedViewParams)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
+  CompositeView(flutterPlatformViewsController, 2, *embeddedViewParams);
 
   gMockPlatformView.backgroundColor = UIColor.redColor;
   XCTAssertTrue([gMockPlatformView.superview.superview isKindOfClass:ChildClippingView.class]);
@@ -1982,11 +1899,7 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   auto embeddedViewParams = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix * translateMatrix, flutter::DlSize(5, 5), stack);
 
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:2
-                                                    withParams:std::move(embeddedViewParams)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
+  CompositeView(flutterPlatformViewsController, 2, *embeddedViewParams);
 
   gMockPlatformView.backgroundColor = UIColor.redColor;
   XCTAssertTrue([gMockPlatformView.superview.superview isKindOfClass:ChildClippingView.class]);
@@ -2036,11 +1949,7 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   auto embeddedViewParams = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix, flutter::DlSize(10, 10), stack);
 
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:2
-                                                    withParams:std::move(embeddedViewParams)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
+  CompositeView(flutterPlatformViewsController, 2, *embeddedViewParams);
 
   gMockPlatformView.backgroundColor = UIColor.redColor;
   XCTAssertTrue([gMockPlatformView.superview.superview isKindOfClass:ChildClippingView.class]);
@@ -2104,11 +2013,7 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   auto embeddedViewParams = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix, flutter::DlSize(10, 10), stack);
 
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:2
-                                                    withParams:std::move(embeddedViewParams)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
+  CompositeView(flutterPlatformViewsController, 2, *embeddedViewParams);
 
   gMockPlatformView.backgroundColor = UIColor.redColor;
   XCTAssertTrue([gMockPlatformView.superview.superview isKindOfClass:ChildClippingView.class]);
@@ -2187,11 +2092,7 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   auto embeddedViewParams = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix, flutter::DlSize(10, 10), stack);
 
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:2
-                                                    withParams:std::move(embeddedViewParams)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
+  CompositeView(flutterPlatformViewsController, 2, *embeddedViewParams);
 
   gMockPlatformView.backgroundColor = UIColor.redColor;
   XCTAssertTrue([gMockPlatformView.superview.superview isKindOfClass:ChildClippingView.class]);
@@ -2283,11 +2184,7 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   auto embeddedViewParams = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix, flutter::DlSize(10, 10), stack);
 
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:2
-                                                    withParams:std::move(embeddedViewParams)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
+  CompositeView(flutterPlatformViewsController, 2, *embeddedViewParams);
 
   gMockPlatformView.backgroundColor = UIColor.redColor;
   XCTAssertTrue([gMockPlatformView.superview.superview isKindOfClass:ChildClippingView.class]);
@@ -2395,11 +2292,7 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   auto embeddedViewParams = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix, flutter::DlSize(20, 20), stack);
 
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:2
-                                                    withParams:std::move(embeddedViewParams)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
+  CompositeView(flutterPlatformViewsController, 2, *embeddedViewParams);
 
   gMockPlatformView.backgroundColor = UIColor.redColor;
   XCTAssertTrue([gMockPlatformView.superview.superview isKindOfClass:ChildClippingView.class]);
@@ -2463,11 +2356,7 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   auto embeddedViewParams = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix, flutter::DlSize(10, 10), stack);
 
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:2
-                                                    withParams:std::move(embeddedViewParams)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
+  CompositeView(flutterPlatformViewsController, 2, *embeddedViewParams);
 
   gMockPlatformView.backgroundColor = UIColor.redColor;
   XCTAssertTrue([gMockPlatformView.superview.superview isKindOfClass:ChildClippingView.class]);
@@ -2559,11 +2448,7 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   auto embeddedViewParams = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix, flutter::DlSize(10, 10), stack);
 
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:2
-                                                    withParams:std::move(embeddedViewParams)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
+  CompositeView(flutterPlatformViewsController, 2, *embeddedViewParams);
 
   gMockPlatformView.backgroundColor = UIColor.redColor;
   XCTAssertTrue([gMockPlatformView.superview.superview isKindOfClass:ChildClippingView.class]);
@@ -3834,11 +3719,9 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   auto embeddedViewParams_1 =
       std::make_unique<flutter::EmbeddedViewParams>(finalMatrix, flutter::DlSize(300, 300), stack);
 
+  CompositeView(flutterPlatformViewsController, 2, *embeddedViewParams_1);
   [flutterPlatformViewsController prerollCompositeEmbeddedView:2
                                                     withParams:std::move(embeddedViewParams_1)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
 
   // A frame whose encode fails is not submitted.
   auto encode_failed_frame_submitted = std::make_shared<bool>(false);
@@ -3857,11 +3740,9 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
 
   auto embeddedViewParams_2 =
       std::make_unique<flutter::EmbeddedViewParams>(finalMatrix, flutter::DlSize(300, 300), stack);
+  CompositeView(flutterPlatformViewsController, 2, *embeddedViewParams_2);
   [flutterPlatformViewsController prerollCompositeEmbeddedView:2
                                                     withParams:std::move(embeddedViewParams_2)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
 
   // A frame whose encode succeeds is submitted.
   auto encode_succeeded_frame_submitted = std::make_shared<bool>(false);
@@ -3945,7 +3826,7 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
                                                      }]
             result:result];
 
-  // First frame, |embeddedViewCount| is not empty after composite.
+  // First frame, |embeddedViewCount| is not empty after preroll.
   [flutterPlatformViewsController beginFrameWithSize:flutter::DlISize(300, 300)
                                     devicePixelRatio:[UIScreen mainScreen].scale];
   flutter::MutatorsStack stack;
@@ -3954,9 +3835,6 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
       std::make_unique<flutter::EmbeddedViewParams>(finalMatrix, flutter::DlSize(300, 300), stack);
   [flutterPlatformViewsController prerollCompositeEmbeddedView:0
                                                     withParams:std::move(embeddedViewParams1)];
-  [flutterPlatformViewsController
-      compositeView:0
-         withParams:[flutterPlatformViewsController compositionParamsForView:0]];
 
   XCTAssertEqual(flutterPlatformViewsController.embeddedViewCount, 1UL);
 
@@ -3969,9 +3847,6 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
       std::make_unique<flutter::EmbeddedViewParams>(finalMatrix, flutter::DlSize(300, 300), stack);
   [flutterPlatformViewsController prerollCompositeEmbeddedView:0
                                                     withParams:std::move(embeddedViewParams2)];
-  [flutterPlatformViewsController
-      compositeView:0
-         withParams:[flutterPlatformViewsController compositionParamsForView:0]];
 
   XCTAssertEqual(flutterPlatformViewsController.embeddedViewCount, 1UL);
 }
@@ -4276,29 +4151,19 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   auto embeddedViewParams1 = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix, flutter::DlSize(10, 10), stack1);
 
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:1
-                                                    withParams:std::move(embeddedViewParams1)];
-  [flutterPlatformViewsController
-      compositeView:1
-         withParams:[flutterPlatformViewsController compositionParamsForView:1]];
+  CompositeView(flutterPlatformViewsController, 1, *embeddedViewParams1);
 
   UIView* childClippingView1 = gMockPlatformView.superview.superview;
   UIView* maskView1 = childClippingView1.maskView;
   XCTAssertNotNil(maskView1);
 
   // Composite a new frame.
-  [flutterPlatformViewsController beginFrameWithSize:flutter::DlISize(100, 100)
-                                    devicePixelRatio:[UIScreen mainScreen].scale];
   flutter::MutatorsStack stack2;
   auto embeddedViewParams2 = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix, flutter::DlSize(10, 10), stack2);
   auto embeddedViewParams3 = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix, flutter::DlSize(10, 10), stack2);
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:1
-                                                    withParams:std::move(embeddedViewParams3)];
-  [flutterPlatformViewsController
-      compositeView:1
-         withParams:[flutterPlatformViewsController compositionParamsForView:1]];
+  CompositeView(flutterPlatformViewsController, 1, *embeddedViewParams3);
 
   childClippingView1 = gMockPlatformView.superview.superview;
 
@@ -4314,11 +4179,7 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
 
   auto embeddedViewParams4 = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix, flutter::DlSize(10, 10), stack1);
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:2
-                                                    withParams:std::move(embeddedViewParams4)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
+  CompositeView(flutterPlatformViewsController, 2, *embeddedViewParams4);
 
   UIView* childClippingView2 = gMockPlatformView.superview.superview;
 
@@ -4382,19 +4243,11 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   auto embeddedViewParams2 = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix, flutter::DlSize(10, 10), stack2);
 
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:1
-                                                    withParams:std::move(embeddedViewParams1)];
-  [flutterPlatformViewsController
-      compositeView:1
-         withParams:[flutterPlatformViewsController compositionParamsForView:1]];
+  CompositeView(flutterPlatformViewsController, 1, *embeddedViewParams1);
 
   UIView* childClippingView1 = view1.superview.superview;
 
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:2
-                                                    withParams:std::move(embeddedViewParams2)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
+  CompositeView(flutterPlatformViewsController, 2, *embeddedViewParams2);
 
   UIView* childClippingView2 = view2.superview.superview;
   UIView* maskView1 = childClippingView1.maskView;
@@ -4444,11 +4297,7 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   auto embeddedViewParams2 = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix, flutter::DlSize(10, 10), stack2);
 
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:1
-                                                    withParams:std::move(embeddedViewParams1)];
-  [flutterPlatformViewsController
-      compositeView:1
-         withParams:[flutterPlatformViewsController compositionParamsForView:1]];
+  CompositeView(flutterPlatformViewsController, 1, *embeddedViewParams1);
 
   UIView* childClippingView = gMockPlatformView.superview.superview;
 
@@ -5199,11 +5048,7 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   auto embeddedViewParams = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix, flutter::DlSize(10, 10), stack);
 
-  [flutterPlatformViewsController prerollCompositeEmbeddedView:2
-                                                    withParams:std::move(embeddedViewParams)];
-  [flutterPlatformViewsController
-      compositeView:2
-         withParams:[flutterPlatformViewsController compositionParamsForView:2]];
+  CompositeView(flutterPlatformViewsController, 2, *embeddedViewParams);
 
   gMockPlatformView.backgroundColor = UIColor.redColor;
   XCTAssertTrue([gMockPlatformView.superview.superview isKindOfClass:ChildClippingView.class]);
