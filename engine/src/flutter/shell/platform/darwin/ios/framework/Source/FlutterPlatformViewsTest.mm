@@ -1753,7 +1753,8 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   auto embeddedViewParams = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix, flutter::DlSize(10, 10), stack);
 
-  [flutterPlatformViewsController beginFrameWithSize:flutter::DlISize(0, 0)];
+  [flutterPlatformViewsController beginFrameWithSize:flutter::DlISize(0, 0)
+                                    devicePixelRatio:[UIScreen mainScreen].scale];
   [flutterPlatformViewsController prerollCompositeEmbeddedView:2
                                                     withParams:std::move(embeddedViewParams)];
   [flutterPlatformViewsController pushVisitedPlatformViewId:2];
@@ -1791,7 +1792,8 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   // New frame, with no filter pushed.
   auto embeddedViewParams2 = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix, flutter::DlSize(10, 10), stack);
-  [flutterPlatformViewsController beginFrameWithSize:flutter::DlISize(0, 0)];
+  [flutterPlatformViewsController beginFrameWithSize:flutter::DlISize(0, 0)
+                                    devicePixelRatio:[UIScreen mainScreen].scale];
   [flutterPlatformViewsController prerollCompositeEmbeddedView:2
                                                     withParams:std::move(embeddedViewParams2)];
   [flutterPlatformViewsController
@@ -3944,7 +3946,8 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
             result:result];
 
   // First frame, |embeddedViewCount| is not empty after composite.
-  [flutterPlatformViewsController beginFrameWithSize:flutter::DlISize(300, 300)];
+  [flutterPlatformViewsController beginFrameWithSize:flutter::DlISize(300, 300)
+                                    devicePixelRatio:[UIScreen mainScreen].scale];
   flutter::MutatorsStack stack;
   flutter::DlMatrix finalMatrix;
   auto embeddedViewParams1 =
@@ -3958,7 +3961,8 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   XCTAssertEqual(flutterPlatformViewsController.embeddedViewCount, 1UL);
 
   // Second frame, |embeddedViewCount| should be empty at the start
-  [flutterPlatformViewsController beginFrameWithSize:flutter::DlISize(300, 300)];
+  [flutterPlatformViewsController beginFrameWithSize:flutter::DlISize(300, 300)
+                                    devicePixelRatio:[UIScreen mainScreen].scale];
   XCTAssertEqual(flutterPlatformViewsController.embeddedViewCount, 0UL);
 
   auto embeddedViewParams2 =
@@ -4008,7 +4012,8 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
             result:result];
   UIView* view2 = gMockPlatformView;
 
-  [flutterPlatformViewsController beginFrameWithSize:flutter::DlISize(300, 300)];
+  [flutterPlatformViewsController beginFrameWithSize:flutter::DlISize(300, 300)
+                                    devicePixelRatio:[UIScreen mainScreen].scale];
   flutter::MutatorsStack stack;
   flutter::DlMatrix finalMatrix;
   auto embeddedViewParams1 =
@@ -4033,7 +4038,8 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
                 @"The first clipping view should be added before the second clipping view.");
 
   // Need to recreate these params since they are `std::move`ed.
-  [flutterPlatformViewsController beginFrameWithSize:flutter::DlISize(300, 300)];
+  [flutterPlatformViewsController beginFrameWithSize:flutter::DlISize(300, 300)
+                                    devicePixelRatio:[UIScreen mainScreen].scale];
   // Process the second frame in the opposite order.
   embeddedViewParams2 =
       std::make_unique<flutter::EmbeddedViewParams>(finalMatrix, flutter::DlSize(500, 500), stack);
@@ -4090,7 +4096,8 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
             result:result];
   UIView* view2 = gMockPlatformView;
 
-  [flutterPlatformViewsController beginFrameWithSize:flutter::DlISize(300, 300)];
+  [flutterPlatformViewsController beginFrameWithSize:flutter::DlISize(300, 300)
+                                    devicePixelRatio:[UIScreen mainScreen].scale];
   flutter::MutatorsStack stack;
   flutter::DlMatrix finalMatrix;
   auto embeddedViewParams1 =
@@ -4115,7 +4122,8 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
                 @"The first clipping view should be added before the second clipping view.");
 
   // Need to recreate these params since they are `std::move`ed.
-  [flutterPlatformViewsController beginFrameWithSize:flutter::DlISize(300, 300)];
+  [flutterPlatformViewsController beginFrameWithSize:flutter::DlISize(300, 300)
+                                    devicePixelRatio:[UIScreen mainScreen].scale];
   // Process the second frame in the same order.
   embeddedViewParams1 =
       std::make_unique<flutter::EmbeddedViewParams>(finalMatrix, flutter::DlSize(300, 300), stack);
@@ -4271,7 +4279,8 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   XCTAssertNotNil(maskView1);
 
   // Composite a new frame.
-  [flutterPlatformViewsController beginFrameWithSize:flutter::DlISize(100, 100)];
+  [flutterPlatformViewsController beginFrameWithSize:flutter::DlISize(100, 100)
+                                    devicePixelRatio:[UIScreen mainScreen].scale];
   flutter::MutatorsStack stack2;
   auto embeddedViewParams2 = std::make_unique<flutter::EmbeddedViewParams>(
       screenScaleMatrix, flutter::DlSize(10, 10), stack2);
@@ -4503,7 +4512,8 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   {
     // **** First frame, view id 0, 1 in the composition_order_, disposing view 0 is called. **** //
     // No view should be disposed, or removed from the composition order.
-    [flutterPlatformViewsController beginFrameWithSize:flutter::DlISize(300, 300)];
+    [flutterPlatformViewsController beginFrameWithSize:flutter::DlISize(300, 300)
+                                      devicePixelRatio:[UIScreen mainScreen].scale];
     flutter::MutatorsStack stack;
     flutter::DlMatrix finalMatrix;
     auto embeddedViewParams0 = std::make_unique<flutter::EmbeddedViewParams>(
@@ -4541,7 +4551,8 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   {
     // **** Second frame, view id 1 in the composition_order_, no disposing view is called,  **** //
     // View 0 is removed from the composition order in this frame, hence also disposed.
-    [flutterPlatformViewsController beginFrameWithSize:flutter::DlISize(300, 300)];
+    [flutterPlatformViewsController beginFrameWithSize:flutter::DlISize(300, 300)
+                                      devicePixelRatio:[UIScreen mainScreen].scale];
     flutter::MutatorsStack stack;
     flutter::DlMatrix finalMatrix;
     auto embeddedViewParams1 = std::make_unique<flutter::EmbeddedViewParams>(
@@ -4564,7 +4575,8 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
                            viewId:(int64_t)viewId
                            offset:(flutter::DlScalar)offset
                    backdropFilter:(BOOL)backdropFilter {
-  [controller beginFrameWithSize:flutter::DlISize(300, 300)];
+  [controller beginFrameWithSize:flutter::DlISize(300, 300)
+                devicePixelRatio:[UIScreen mainScreen].scale];
   flutter::MutatorsStack stack;
   flutter::DlScalar screenScale = [UIScreen mainScreen].scale;
   flutter::DlMatrix screenScaleMatrix = flutter::DlMatrix::MakeScale({screenScale, screenScale, 1});
@@ -4615,7 +4627,7 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   XCTAssertNotNil(touchInterceptor);
   XCTAssertEqual(touchInterceptor.alpha, 1.0);
 
-  // compositeView:withParams: resets the interceptor's alpha to 1.
+  // compositeLayer: resets the interceptor's alpha to 1.
   // Set it to a different value so we can detect whether the view was recomposited below.
   touchInterceptor.alpha = 0.5;
 
@@ -4718,7 +4730,8 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   [flutterPlatformViewsController
       onMethodCall:[FlutterMethodCall methodCallWithMethodName:@"dispose" arguments:@0]
             result:result];
-  [flutterPlatformViewsController beginFrameWithSize:flutter::DlISize(300, 300)];
+  [flutterPlatformViewsController beginFrameWithSize:flutter::DlISize(300, 300)
+                                    devicePixelRatio:[UIScreen mainScreen].scale];
   [flutterPlatformViewsController submitFrame:CreateTestSurfaceFrame()
                                withIosContext:std::make_shared<FakeIOSContext>()];
 
@@ -4736,6 +4749,100 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
   CGRect rectInFlutterView = [gMockPlatformView convertRect:gMockPlatformView.bounds
                                                      toView:flutterView];
   XCTAssertTrue(CGRectEqualToRect(rectInFlutterView, CGRectMake(10, 10, 100, 100)));
+}
+
+- (void)testSubmitFrameRecompositesViewAbsentFromPreviousFrame {
+  FlutterPlatformViewsController* flutterPlatformViewsController =
+      CreateTestPlatformViewsController(self.name);
+  FlutterPlatformViewsTestMockFlutterPlatformFactory* factory =
+      [[FlutterPlatformViewsTestMockFlutterPlatformFactory alloc] init];
+  [flutterPlatformViewsController
+                   registerViewFactory:factory
+                                withId:@"MockFlutterPlatformView"
+      gestureRecognizersBlockingPolicy:FlutterPlatformViewGestureRecognizersBlockingPolicyEager];
+  FlutterResult result = ^(id result) {
+  };
+  [flutterPlatformViewsController
+      onMethodCall:[FlutterMethodCall methodCallWithMethodName:@"create"
+                                                     arguments:@{
+                                                       @"id" : @0,
+                                                       @"viewType" : @"MockFlutterPlatformView",
+                                                       @"gestureBlockingPolicy" : @"eager"
+                                                     }]
+            result:result];
+  UIView* flutterView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 500, 500)];
+  flutterPlatformViewsController.flutterView = flutterView;
+
+  [self submitFrameWithController:flutterPlatformViewsController
+                           viewId:0
+                           offset:10
+                   backdropFilter:NO];
+  FlutterTouchInterceptingView* touchInterceptor = FindTouchInterceptingView(gMockPlatformView);
+  XCTAssertNotNil(touchInterceptor);
+
+  // compositeLayer: resets the interceptor's alpha to 1.
+  // Set it to a different value so we can detect whether the view was recomposited below.
+  touchInterceptor.alpha = 0.5;
+
+  // Submit a frame without the view.
+  [flutterPlatformViewsController beginFrameWithSize:flutter::DlISize(300, 300)
+                                    devicePixelRatio:[UIScreen mainScreen].scale];
+  [flutterPlatformViewsController submitFrame:CreateTestSurfaceFrame()
+                               withIosContext:std::make_shared<FakeIOSContext>()];
+  // Verify the view was removed from the Flutter view and was not recomposited.
+  XCTAssertNil(touchInterceptor.superview.superview);
+  XCTAssertEqual(touchInterceptor.alpha, 0.5);
+
+  // Verify the view is recomposited when it is next in a frame, even when the params are identical.
+  [self submitFrameWithController:flutterPlatformViewsController
+                           viewId:0
+                           offset:10
+                   backdropFilter:NO];
+  XCTAssertEqual(touchInterceptor.alpha, 1.0);
+}
+
+- (void)testSubmitFrameRecompositesViewsWhenFlutterViewChanges {
+  FlutterPlatformViewsController* flutterPlatformViewsController =
+      CreateTestPlatformViewsController(self.name);
+  FlutterPlatformViewsTestMockFlutterPlatformFactory* factory =
+      [[FlutterPlatformViewsTestMockFlutterPlatformFactory alloc] init];
+  [flutterPlatformViewsController
+                   registerViewFactory:factory
+                                withId:@"MockFlutterPlatformView"
+      gestureRecognizersBlockingPolicy:FlutterPlatformViewGestureRecognizersBlockingPolicyEager];
+  FlutterResult result = ^(id result) {
+  };
+  [flutterPlatformViewsController
+      onMethodCall:[FlutterMethodCall methodCallWithMethodName:@"create"
+                                                     arguments:@{
+                                                       @"id" : @0,
+                                                       @"viewType" : @"MockFlutterPlatformView",
+                                                       @"gestureBlockingPolicy" : @"eager"
+                                                     }]
+            result:result];
+  UIView* flutterView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 500, 500)];
+  flutterPlatformViewsController.flutterView = flutterView;
+
+  [self submitFrameWithController:flutterPlatformViewsController
+                           viewId:0
+                           offset:10
+                   backdropFilter:NO];
+  FlutterTouchInterceptingView* touchInterceptor = FindTouchInterceptingView(gMockPlatformView);
+  XCTAssertNotNil(touchInterceptor);
+
+  // compositeLayer: resets the interceptor's alpha to 1.
+  // Set it to a different value so we can detect whether the view was recomposited below.
+  touchInterceptor.alpha = 0.5;
+
+  // Verify the view is recomposited after the Flutter view changes, even when the params are
+  // identical.
+  UIView* otherFlutterView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 500, 500)];
+  flutterPlatformViewsController.flutterView = otherFlutterView;
+  [self submitFrameWithController:flutterPlatformViewsController
+                           viewId:0
+                           offset:10
+                   backdropFilter:NO];
+  XCTAssertEqual(touchInterceptor.alpha, 1.0);
 }
 
 - (void)testOnlyPlatformViewsAreRemovedWhenReset {
@@ -4951,7 +5058,8 @@ static UIGestureRecognizer* FindForwardingGestureRecognizer(UIView* view) {
                                                      }]
             result:result];
 
-  [flutterPlatformViewsController beginFrameWithSize:flutter::DlISize(300, 300)];
+  [flutterPlatformViewsController beginFrameWithSize:flutter::DlISize(300, 300)
+                                    devicePixelRatio:[UIScreen mainScreen].scale];
   flutter::MutatorsStack stack;
   flutter::DlMatrix finalMatrix;
   auto embeddedViewParams1 =
