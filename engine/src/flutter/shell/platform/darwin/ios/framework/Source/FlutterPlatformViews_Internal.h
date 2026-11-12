@@ -178,6 +178,20 @@
 @property(nonatomic, readonly) FlutterTouchInterceptingView* touchInterceptor;
 @property(nonatomic, readonly) UIView* rootView;
 
+/// The layer that the view was last composited with, or nil if the view must be composited in the
+/// next frame that includes it.
+///
+/// `FlutterPlatformViewsController` composites the view in `presentFrame:` only if its layer in the
+/// frame differs from this one. The controller sets this to nil when it removes the view from the
+/// Flutter view, and when the Flutter view changes.
+///
+/// When a view is recreated under a disposed ID, this is nil. This is to ensure that it is
+/// composited even if the view is recreated with the same layer. The controller's `onCreate:`
+/// rejects any ID that is still in its `platformViews`, and its
+/// `computeViewsToDisposeWithCompositionOrder:` removes an ID only when presenting a frame that no
+/// longer includes that view.
+@property(nonatomic) FlutterPlatformViewLayer* lastCompositedLayer;
+
 @end
 
 @interface UIView (FirstResponder)
